@@ -28,7 +28,7 @@ interface IMACIFactory {
     function stateTreeDepth() external view returns (uint8);
     function treeDepths() external view returns (Params.TreeDepths memory);
 
-    function getMessageBatchSize(uint8 _messageTreeSubDepth) external pure returns (uint256 _messageBatchSize);
+    function getMessageBatchSize(uint8 _messageTreeSubDepth) external view returns (uint256 _messageBatchSize);
 
     function TREE_ARITY() external pure returns (uint256);
 
@@ -40,5 +40,5 @@ interface IMACIFactory {
         address coordinator,
         DomainObjs.PubKey calldata coordinatorPubKey,
         address maciOwner
-    ) external returns (MACI _maci, MACI.PollContracts memory _pollContracts);
+    ) external returns (address _maci, MACI.PollContracts memory _pollContracts);
 }

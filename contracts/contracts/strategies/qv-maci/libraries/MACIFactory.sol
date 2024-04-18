@@ -150,7 +150,7 @@ contract MACIFactory is Ownable, Params, SnarkCommon, DomainObjs, MACICommon {
         address coordinator,
         PubKey calldata coordinatorPubKey,
         address maciOwner
-    ) external returns (MACI _maci, MACI.PollContracts memory _pollContracts) {
+    ) external returns (address _maci, MACI.PollContracts memory _pollContracts) {
         uint256 messageBatchSize = getMessageBatchSize(treeDepths.messageTreeSubDepth);
 
         if (
@@ -168,7 +168,7 @@ contract MACIFactory is Ownable, Params, SnarkCommon, DomainObjs, MACICommon {
             revert TallyVkNotSet();
         }
 
-        _maci = new MACI(
+        MACI maci = new MACI(
             IPollFactory(factories.pollFactory),
             IMessageProcessorFactory(factories.messageProcessorFactory),
             ITallySubsidyFactory(factories.tallyFactory),
@@ -179,7 +179,7 @@ contract MACIFactory is Ownable, Params, SnarkCommon, DomainObjs, MACICommon {
             stateTreeDepth
         );
 
-        _pollContracts = _maci.deployPoll(
+        _pollContracts = maci.deployPoll(
             duration,
             treeDepths,
             coordinatorPubKey,
@@ -194,8 +194,10 @@ contract MACIFactory is Ownable, Params, SnarkCommon, DomainObjs, MACICommon {
         Ownable(_pollContracts.messageProcessor).transferOwnership(coordinator);
         Ownable(_pollContracts.tally).transferOwnership(coordinator);
 
-        _maci.transferOwnership(maciOwner);
+        maci.transferOwnership(maciOwner);
 
-        emit MaciDeployed(address(_maci));
+        _maci = address(maci);
+
+        emit MaciDeployed(_maci);
     }
 }
