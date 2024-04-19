@@ -9,20 +9,6 @@ import { Multicall } from "@openzeppelin/contracts/utils/Multicall.sol";
 
 import { Contrants, Metadata, IRegistry, IAllo } from "./libraries/Contrants.sol";
 
-// MACI Contracts & Libraries
-import { DomainObjs } from "maci-contracts/contracts/utilities/DomainObjs.sol";
-
-// TODO TopupCredit is going to be the strategy itself or a clonable proxy to save contract size
-import { TopupCredit } from "maci-contracts/contracts/TopupCredit.sol";
-
-import { IMACIFactory } from "./interfaces/IMACIFactory.sol";
-
-import { Tally } from "maci-contracts/contracts/Tally.sol";
-
-import { Poll } from "maci-contracts/contracts/Poll.sol";
-
-import { MACI } from "maci-contracts/contracts/MACI.sol";
-
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -39,7 +25,7 @@ import { MACI } from "maci-contracts/contracts/MACI.sol";
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠙⠋⠛⠙⠋⠛⠙⠋⠛⠙⠋⠃⠀⠀⠀⠀⠀⠀⠀⠀⠠⠿⠻⠟⠿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⠟⠿⠟⠿⠆⠀⠸⠿⠿⠟⠯⠀⠀⠀⠸⠿⠿⠿⠏⠀⠀⠀⠀⠀⠈⠉⠻⠻⡿⣿⢿⡿⡿⠿⠛⠁⠀⠀⠀⠀⠀⠀
 //                    allo.gitcoin.co
 
-contract QVMaciStrategy is BaseStrategy, DomainObjs, Multicall, Contrants {
+abstract contract QVMACIBase is BaseStrategy, Multicall, Contrants {
 
     /// ======================
     /// ======= Storage ======
@@ -78,24 +64,9 @@ contract QVMaciStrategy is BaseStrategy, DomainObjs, Multicall, Contrants {
     /// @dev allocator => bool
     mapping(address => bool) public allowedAllocators;
 
+
     /// @notice The registry contract
     IRegistry private _registry;
-
-    /// @notice The MACI factory Interface contract
-
-    IMACIFactory public _maciFactory;
-
-    address public _maci;
-
-    MACI.PollContracts public _pollContracts;
-
-    bool public isFinalized;
-
-    address public coordinator; // coordinator address
-
-    string public tallyHash;
-
-    uint256 public totalTallyResults;
 
     // slots [4...n]
     /// @notice The status of the recipient for this strategy only
@@ -122,15 +93,6 @@ contract QVMaciStrategy is BaseStrategy, DomainObjs, Multicall, Contrants {
         uint64 allocationEndTime;
         // slot 3
         uint256 maxVoiceCreditsPerAllocator;
-        // slot 4
-        address coordinator;
-        // slot 5 - 6
-        PubKey coordinatorPubKey;
-    }
-
-    struct VoteParams {
-        Message[] messages;
-        PubKey[] pubKeys;
     }
 
     /// @notice The details of the recipient
@@ -171,13 +133,6 @@ contract QVMaciStrategy is BaseStrategy, DomainObjs, Multicall, Contrants {
     /// ========== Modifier ============
     /// ================================
 
-    modifier onlyCoordinator() {
-        if (msg.sender != coordinator) {
-            revert NotCoordinator();
-        }
-        _;
-    }
-
     /// @notice Modifier to check if the registration is active
     /// @dev Reverts if the registration is not active
     modifier onlyActiveRegistration() {
@@ -203,9 +158,7 @@ contract QVMaciStrategy is BaseStrategy, DomainObjs, Multicall, Contrants {
     /// ========== Constructor =============
     /// ====================================
 
-    constructor(address _allo, string memory _name, IMACIFactory maciFactory) BaseStrategy(_allo, _name) {
-        _maciFactory = IMACIFactory(maciFactory);
-    }
+    constructor(address _allo, string memory _name) BaseStrategy(_allo, _name) {}
 
     /// ====================================
     /// =========== Initialize =============
@@ -241,228 +194,16 @@ contract QVMaciStrategy is BaseStrategy, DomainObjs, Multicall, Contrants {
         );
 
         maxVoiceCreditsPerAllocator = _params.maxVoiceCreditsPerAllocator;
-
-        address strategy = address(allo.getPool(_poolId).strategy);
-
-        coordinator = _params.coordinator;
-
-        uint256 pollDuration = _params.allocationEndTime - block.timestamp;
-
-        (_maci, _pollContracts) = _maciFactory.deployMaci(
-            // Sign up gatekeeper is going to be the strategy itself
-            strategy,
-            // Initial voice credit proxy is going to be the strategy itself
-            strategy,
-            // TODO Topup credit is going to be the strategy itself or a clonable proxy to save contract size
-            address(new TopupCredit()),
-            // address(0),
-            // Poll duration is the time between now and the end of the allocation
-            pollDuration,
-            // The Coordinator is the address that is allowed to publish the results
-            _params.coordinator,
-            // The coordinator MACI public key
-            _params.coordinatorPubKey,
-            // MACI owner is the strategy itself
-            strategy
-        );
-
-        emit MaciSet(
-            _maci,
-            _pollContracts.poll,
-            _pollContracts.messageProcessor,
-            _pollContracts.tally,
-            _pollContracts.subsidy
-        );
     }
 
     /// ================================
     /// ====== External/Public =========
     /// ================================
 
-    /**
-     * @dev Signup to this funding round.
-     * @param pubKey Contributor"s public key.
-     */
-    function signup(PubKey calldata pubKey) external {
-        if (isAddressZero(_maci)) revert MaciNotSet();
-        if (isFinalized) revert RoundAlreadyFinalized();
-
-        bytes memory signUpGatekeeperData = abi.encode(msg.sender, maxVoiceCreditsPerAllocator);
-        bytes memory initialVoiceCreditProxyData = abi.encode(msg.sender);
-
-        MACI(_maci).signUp(pubKey, signUpGatekeeperData, initialVoiceCreditProxyData);
-    }
-
-    /**
-     * @dev Register user for voting.
-     * This function is part of SignUpGatekeeper interface.
-     * @param _data Encoded address of a contributor.
-     */
-    function register(address /* _caller */, bytes memory _data) public view {
-        if (msg.sender != _maci) {
-            revert OnlyMaciCanRegisterVoters();
-        }
-
-        address user = abi.decode(_data, (address));
-        bool verified = _isValidAllocator(user);
-
-        if (!verified) {
-            revert UserNotVerified();
-        }
-    }
-
-    /**
-     * @dev Have the votes been tallied
-     */
-    function isTallied() private view returns (bool) {
-        (Poll poll, Tally tally) = getMaciContracts();
-
-        (uint256 numSignUps, ) = poll.numSignUpsAndMessages();
-        (uint8 intStateTreeDepth, , , ) = poll.treeDepths();
-        uint256 tallyBatchSize = TREE_ARITY ** uint256(intStateTreeDepth);
-        uint256 tallyBatchNum = tally.tallyBatchNum();
-        uint256 totalTallied = tallyBatchNum * tallyBatchSize;
-
-        return numSignUps > 0 && totalTallied >= numSignUps;
-    }
-
-    /**
-     * @dev Publish the IPFS hash of the vote tally. Only coordinator can publish.
-     * @param _tallyHash IPFS hash of the vote tally.
-     */
-    function publishTallyHash(string calldata _tallyHash) external onlyCoordinator onlyAfterAllocation {
-        if (isFinalized) {
-            revert RoundAlreadyFinalized();
-        }
-        if (bytes(_tallyHash).length == 0) {
-            revert EmptyTallyHash();
-        }
-
-        tallyHash = _tallyHash;
-        emit TallyPublished(_tallyHash);
-    }
-
-    /**
-     * @dev Get the total amount of votes from MACI,
-     * verify the total amount of spent voice credits across all recipients,
-     * calculate the quadratic alpha value,
-     * and allow recipients to claim funds.
-     * @param _totalSpent Total amount of spent voice credits.
-     * @param _totalSpentSalt The salt.
-     */
-    function finalize(
-        uint256 _totalSpent,
-        uint256 _totalSpentSalt,
-        uint256 _newResultCommitment,
-        uint256 _perVOSpentVoiceCreditsHash
-    ) external onlyPoolManager(msg.sender) onlyAfterAllocation {
-        (Poll poll, Tally tally) = getMaciContracts();
-
-        if (isFinalized) {
-            revert RoundAlreadyFinalized();
-        }
-
-        if (isAddressZero(_maci)) revert MaciNotSet();
-
-        (uint256 deployTime, uint256 duration) = poll.getDeployTimeAndDuration();
-
-        // Require that the voting period is over
-        uint256 secondsPassed = block.timestamp - deployTime;
-        if (secondsPassed <= duration) {
-            revert ALLOCATION_NOT_ENDED();
-        }
-
-        if (!isTallied()) {
-            revert VotesNotTallied();
-        }
-        if (bytes(tallyHash).length == 0) {
-            revert TallyHashNotPublished();
-        }
-
-        // make sure we have received all the tally results
-        (, , , uint8 voteOptionTreeDepth) = poll.treeDepths();
-        uint256 totalResults = uint256(TREE_ARITY) ** uint256(voteOptionTreeDepth);
-        if (totalTallyResults != totalResults) {
-            revert IncompleteTallyResults(totalResults, totalTallyResults);
-        }
-
-        // If nobody voted, the round should be cancelled to avoid locking of matching funds
-        if (_totalSpent == 0) {
-            revert NoVotes();
-        }
-
-        bool verified = tally.verifySpentVoiceCredits(
-            _totalSpent,
-            _totalSpentSalt,
-            _newResultCommitment,
-            _perVOSpentVoiceCreditsHash
-        );
-
-        if (!verified) {
-            revert IncorrectSpentVoiceCredits();
-        }
-
-        // totalRecipientVotes = _totalSpent;
-
-        isFinalized = true;
-    }
-
-    /**
-     * @dev Add and verify tally votes and calculate sum of tally squares for alpha calculation.
-     * @param _voteOptionIndex Vote option index.
-     * @param _tallyResult The results of vote tally for the recipients.
-     * @param _tallyResultProof Proofs of correctness of the vote tally results.
-     * @param _tallyResultSalt the respective salt in the results object in the tally.json
-     * @param _spentVoiceCreditsHash hashLeftRight(number of spent voice credits, spent salt)
-     * @param _perVOSpentVoiceCreditsHash hashLeftRight(merkle root of the no spent voice credits per vote option, perVOSpentVoiceCredits salt)
-     */
-    function _addTallyResult(
-        uint256 _voteOptionIndex,
-        uint256 _tallyResult,
-        uint256[][] memory _tallyResultProof,
-        uint256 _tallyResultSalt,
-        uint256 _spentVoiceCreditsHash,
-        uint256 _perVOSpentVoiceCreditsHash
-    ) external onlyCoordinator {
-
-        (Poll poll, Tally tally) = getMaciContracts();
-
-        (, , , uint8 voteOptionTreeDepth) = poll.treeDepths();
-
-        bool resultVerified = tally.verifyTallyResult(
-            _voteOptionIndex,
-            _tallyResult,
-            _tallyResultProof,
-            _tallyResultSalt,
-            voteOptionTreeDepth,
-            _spentVoiceCreditsHash,
-            _perVOSpentVoiceCreditsHash
-        );
-
-        if (!resultVerified) {
-            revert IncorrectTallyResult();
-        }
-
-        _tallyRecipientVotes(_voteOptionIndex, _tallyResult);
-
-        totalTallyResults++;
-
-        emit TallyResultsAdded(_voteOptionIndex, _tallyResult);
-    }
 
     /// =========================
     /// ==== View Functions =====
     /// =========================
-
-    function isAddressZero(address _address) internal pure returns (bool) {
-        return _address == address(0);
-    }
-
-    // @notice get Poll and Tally contracts
-    // @return Poll and Tally contracts
-    function getMaciContracts() internal view returns (Poll _poll, Tally _tally) {
-        return (Poll(_pollContracts.poll), Tally(_pollContracts.tally));
-    }
 
     /// @notice Get recipient status
     /// @param _recipientId Id of the recipient
@@ -497,59 +238,6 @@ contract QVMaciStrategy is BaseStrategy, DomainObjs, Multicall, Contrants {
         emit AllocatorRemoved(_allocator, msg.sender);
     }
 
-    /// @notice Allocate votes to a recipient
-    /// @param _data The data
-    /// @param _sender The sender of the transaction
-    /// @dev Only the pool manager(s) can call this function
-    function _allocate(bytes memory _data, address _sender) internal override {
-        (Poll poll, ) = getMaciContracts();
-
-        VoteParams memory voteParams = abi.decode(_data, (VoteParams));
-
-        if (voteParams.messages.length != voteParams.pubKeys.length) {
-            revert INVALID();
-        }
-
-        // TODO - If we allow donation through the allocation, we need to update the function to handle it and return before the Private allocation starts
-
-        poll.publishMessageBatch(voteParams.messages, voteParams.pubKeys);
-
-        emit Allocated(address(0), voteParams.messages.length, _sender);
-    }
-
-    /// @notice _tallyRecipientVotes votes to a recipient
-    /// @param _voteOptionIndex The vote option index
-    /// @param _voiceCreditsToAllocate The voice credits to allocate
-    /// @dev Only the pool manager(s) can call this function
-    function _tallyRecipientVotes(uint256 _voteOptionIndex, uint256 _voiceCreditsToAllocate) internal {
-        address recipientId = recipientIndexToAddress[_voteOptionIndex];
-
-        // spin up the structs in storage for updating
-        Recipient storage recipient = recipients[recipientId];
-
-        if (recipient.tallyVerified) {
-            revert VoteResultsAlreadyVerified();
-        }
-
-        recipient.tallyVerified = true;
-
-        // check that the recipient is accepted
-        if (!_isAcceptedRecipient(recipientId)) revert RECIPIENT_ERROR(recipientId);
-
-        // check the `_voiceCreditsToAllocate` is > 0
-        if (_voiceCreditsToAllocate == 0) revert INVALID();
-
-        // determine actual votes cast
-        uint256 voteResult = _sqrt(_voiceCreditsToAllocate * 1e18);
-
-        // update the values
-        totalRecipientVotes += voteResult;
-
-        recipient.totalVotesReceived = voteResult;
-
-        // emit the event with the vote results
-        emit Allocated(recipientId, voteResult, coordinator);
-    }
 
     /// @notice Returns if the recipient is accepted
     /// @param _recipientId The recipient id
@@ -633,21 +321,6 @@ contract QVMaciStrategy is BaseStrategy, DomainObjs, Multicall, Contrants {
             }
         }
     }
-
-    // We cant have this function because MACI poll times are already set in the initialize function
-    // /// @notice Set the start and end dates for the pool
-    // /// @param _registrationStartTime The start time for the registration
-    // /// @param _registrationEndTime The end time for the registration
-    // /// @param _allocationStartTime The start time for the allocation
-    // /// @param _allocationEndTime The end time for the allocation
-    // function updatePoolTimestamps(
-    //     uint64 _registrationStartTime,
-    //     uint64 _registrationEndTime,
-    //     uint64 _allocationStartTime,
-    //     uint64 _allocationEndTime
-    // ) external onlyPoolManager(msg.sender) {
-    //     _updatePoolTimestamps(_registrationStartTime, _registrationEndTime, _allocationStartTime, _allocationEndTime);
-    // }
 
     /// @notice Withdraw the tokens from the pool
     /// @dev Callable by the pool manager only 30 days after the allocation has ended
@@ -863,34 +536,6 @@ contract QVMaciStrategy is BaseStrategy, DomainObjs, Multicall, Contrants {
         }
     }
 
-    // /// @notice Allocate voice credits to a recipient
-    // /// @dev This can only be called during active allocation period
-    // /// _allocator The allocator details
-    // /// @param _recipient The recipient details
-    // /// @param _recipientId The ID of the recipient
-    // /// @param _voiceCreditsToAllocate The voice credits to allocate to the recipient
-    // /// _sender The sender of the transaction
-    // function _qv_allocate(
-    //     Recipient storage _recipient,
-    //     address _recipientId,
-    //     uint256 _voiceCreditsToAllocate
-    // ) internal {
-    //     // check the `_voiceCreditsToAllocate` is > 0
-    //     if (_voiceCreditsToAllocate == 0) revert INVALID();
-
-    //     // check if the recipient is accepted
-    //     if (!_isAcceptedRecipient(_recipientId)) revert RECIPIENT_ERROR(_recipientId);
-
-    //     // determine actual votes cast
-    //     uint256 voteResult = _sqrt(_voiceCreditsToAllocate * 1e18);
-
-    //     // update the values
-    //     totalRecipientVotes += voteResult;
-    //     _recipient.totalVotesReceived = voteResult;
-
-    //     // emit the event with the vote results
-    //     emit Allocated(_recipientId, voteResult, coordinator);
-    // }
 
     /// @notice Add a recipient to the MACI contract
     /// @param _recipientId The ID of the recipient
