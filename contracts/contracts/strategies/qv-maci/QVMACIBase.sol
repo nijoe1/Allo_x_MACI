@@ -7,8 +7,7 @@ import { BaseStrategy } from "../BaseStrategy.sol";
 // External Libraries
 import { Multicall } from "@openzeppelin/contracts/utils/Multicall.sol";
 
-import { Contrants, Metadata, IRegistry, IAllo } from "./libraries/Contrants.sol";
-
+import { Contrants, Metadata, IRegistry, IAllo } from "./interfaces/Contrants.sol";
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -26,7 +25,6 @@ import { Contrants, Metadata, IRegistry, IAllo } from "./libraries/Contrants.sol
 //                    allo.gitcoin.co
 
 abstract contract QVMACIBase is BaseStrategy, Multicall, Contrants {
-
     /// ======================
     /// ======= Storage ======
     /// ======================
@@ -63,7 +61,6 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Contrants {
     /// @notice The details of the allowed allocator
     /// @dev allocator => bool
     mapping(address => bool) public allowedAllocators;
-
 
     /// @notice The registry contract
     IRegistry private _registry;
@@ -164,17 +161,6 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Contrants {
     /// =========== Initialize =============
     /// ====================================
 
-    /// @notice Initialize the strategy
-    /// @param _poolId The ID of the pool
-    /// @param _data The initialization data for the strategy
-    /// @custom:data (InitializeParamsSimple)
-    function initialize(uint256 _poolId, bytes memory _data) external virtual override onlyAllo {
-        InitializeParams memory initializeParams = abi.decode(_data, (InitializeParams));
-        __QVBaseStrategy_init(_poolId, initializeParams);
-
-        emit Initialized(_poolId, _data);
-    }
-
     /// @notice Internal initialize function
     /// @param _poolId The ID of the pool
     /// @param _params The initialize params for the strategy
@@ -199,7 +185,6 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Contrants {
     /// ================================
     /// ====== External/Public =========
     /// ================================
-
 
     /// =========================
     /// ==== View Functions =====
@@ -237,7 +222,6 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Contrants {
 
         emit AllocatorRemoved(_allocator, msg.sender);
     }
-
 
     /// @notice Returns if the recipient is accepted
     /// @param _recipientId The recipient id
@@ -535,7 +519,6 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Contrants {
             z = (x / z + z) / 2;
         }
     }
-
 
     /// @notice Add a recipient to the MACI contract
     /// @param _recipientId The ID of the recipient

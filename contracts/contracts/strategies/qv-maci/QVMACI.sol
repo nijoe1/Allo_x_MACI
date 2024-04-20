@@ -1,23 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.19;
 
+import { ClonableMACIFactory } from "../../ClonableMaciContracts/ClonableMACIFactory.sol";
+
 // Core Contracts
 import { QVMACIBase } from "./QVMACIBase.sol";
 
 // MACI Contracts & Libraries
 import { DomainObjs } from "maci-contracts/contracts/utilities/DomainObjs.sol";
 
-// TODO TopupCredit is going to be the strategy itself or a clonable proxy to save contract size
-import { TopupCredit } from "maci-contracts/contracts/TopupCredit.sol";
-
-import { IMACIFactory } from "./interfaces/IMACIFactory.sol";
-
 import { Tally } from "maci-contracts/contracts/Tally.sol";
 
 import { Poll } from "maci-contracts/contracts/Poll.sol";
 
-import { MACI } from "maci-contracts/contracts/MACI.sol";
+import { ClonableMACI } from "../../ClonableMaciContracts/ClonableMACI.sol";
 
+import { Params } from "maci-contracts/contracts/utilities/Params.sol";
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -34,45 +32,42 @@ import { MACI } from "maci-contracts/contracts/MACI.sol";
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠙⠋⠛⠙⠋⠛⠙⠋⠛⠙⠋⠃⠀⠀⠀⠀⠀⠀⠀⠀⠠⠿⠻⠟⠿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⠟⠿⠟⠿⠆⠀⠸⠿⠿⠟⠯⠀⠀⠀⠸⠿⠿⠿⠏⠀⠀⠀⠀⠀⠈⠉⠻⠻⡿⣿⢿⡿⡿⠿⠛⠁⠀⠀⠀⠀⠀⠀
 //                    allo.gitcoin.co
 
-contract QVMACI is QVMACIBase, DomainObjs {
-
+contract QVMACI is QVMACIBase, DomainObjs, Params {
     /// ======================
     /// ======= Storage ======
     /// ======================
 
-    IMACIFactory public _maciFactory;
+    address public maciFactory;
 
     address public _maci;
 
-    MACI.PollContracts public _pollContracts;
+    ClonableMACI.PollContracts public _pollContracts;
 
     bool public isFinalized;
 
     address public coordinator; // coordinator address
 
+    PubKey public coordinatorPubKey; // coordinator public key
+
     string public tallyHash;
 
     uint256 public totalTallyResults;
 
-    /// @notice The parameters used to initialize the strategy
-    struct InitializeParamsMACI {
-        InitializeParams params;
-
-        MACIParams maciParams;
+    struct MaciParams {
+        address coordinator;
+        PubKey coordinatorPubKey;
+        address maciFactory;
     }
 
-    struct MACIParams {
-        // slot 4
-        address coordinator;
-        // slot 5 - 6
-        PubKey coordinatorPubKey;
+    struct InitializeParamsMACI {
+        InitializeParams initializeParams;
+        MaciParams maciParams;
     }
 
     struct VoteParams {
         Message[] messages;
         PubKey[] pubKeys;
     }
-
 
     /// ================================
     /// ========== Modifier ============
@@ -89,8 +84,8 @@ contract QVMACI is QVMACIBase, DomainObjs {
     /// ========== Constructor =============
     /// ====================================
 
-    constructor(address _allo, string memory _name, IMACIFactory maciFactory) QVMACIBase(_allo, _name) {
-        _maciFactory = IMACIFactory(maciFactory);
+    constructor(address _allo, string memory _name, address _maciFactory) QVMACIBase(_allo, _name) {
+        maciFactory = _maciFactory;
     }
 
     /// ====================================
@@ -103,7 +98,7 @@ contract QVMACI is QVMACIBase, DomainObjs {
     /// @custom:data (InitializeParamsSimple)
     function initialize(uint256 _poolId, bytes memory _data) external virtual override onlyAllo {
         InitializeParamsMACI memory _initializeParams = abi.decode(_data, (InitializeParamsMACI));
-        
+
         __QVMACIStrategy_init(_poolId, _initializeParams);
 
         emit Initialized(_poolId, _data);
@@ -113,31 +108,24 @@ contract QVMACI is QVMACIBase, DomainObjs {
     /// @param _poolId The ID of the pool
     /// @param _params The initialize params for the strategy
     function __QVMACIStrategy_init(uint256 _poolId, InitializeParamsMACI memory _params) internal {
-        __QVBaseStrategy_init(_poolId, _params.params);
+        __QVBaseStrategy_init(_poolId, _params.initializeParams);
 
         address strategy = address(allo.getPool(_poolId).strategy);
 
         coordinator = _params.maciParams.coordinator;
 
-        uint256 pollDuration = _params.params.allocationEndTime - block.timestamp;
+        coordinatorPubKey = _params.maciParams.coordinatorPubKey;
 
-        (_maci, _pollContracts) = _maciFactory.deployMaci(
-            // Sign up gatekeeper is going to be the strategy itself
+        _maci = ClonableMACIFactory(_params.maciParams.maciFactory).createMACI(
             strategy,
-            // Initial voice credit proxy is going to be the strategy itself
             strategy,
-            // TODO Topup credit is going to be the strategy itself or a clonable proxy to save contract size
-            address(new TopupCredit()),
-            // address(0),
-            // Poll duration is the time between now and the end of the allocation
-            pollDuration,
-            // The Coordinator is the address that is allowed to publish the results
-            coordinator,
-            // The coordinator MACI public key
-            _params.maciParams.coordinatorPubKey,
-            // MACI owner is the strategy itself
-            strategy
+            address(0),
+            coordinator
         );
+
+        uint256 _pollDuration = _params.initializeParams.allocationEndTime - block.timestamp;
+
+        _pollContracts = ClonableMACI(_maci).deployPoll(_pollDuration, _params.maciParams.coordinatorPubKey);
 
         emit MaciSet(
             _maci,
@@ -163,7 +151,7 @@ contract QVMACI is QVMACIBase, DomainObjs {
         bytes memory signUpGatekeeperData = abi.encode(msg.sender, maxVoiceCreditsPerAllocator);
         bytes memory initialVoiceCreditProxyData = abi.encode(msg.sender);
 
-        MACI(_maci).signUp(pubKey, signUpGatekeeperData, initialVoiceCreditProxyData);
+        ClonableMACI(_maci).signUp(pubKey, signUpGatekeeperData, initialVoiceCreditProxyData);
     }
 
     /**
@@ -182,21 +170,6 @@ contract QVMACI is QVMACIBase, DomainObjs {
         if (!verified) {
             revert UserNotVerified();
         }
-    }
-
-    /**
-     * @dev Have the votes been tallied
-     */
-    function isTallied() private view returns (bool) {
-        (Poll poll, Tally tally) = getMaciContracts();
-
-        (uint256 numSignUps, ) = poll.numSignUpsAndMessages();
-        (uint8 intStateTreeDepth, , , ) = poll.treeDepths();
-        uint256 tallyBatchSize = TREE_ARITY ** uint256(intStateTreeDepth);
-        uint256 tallyBatchNum = tally.tallyBatchNum();
-        uint256 totalTallied = tallyBatchNum * tallyBatchSize;
-
-        return numSignUps > 0 && totalTallied >= numSignUps;
     }
 
     /**
@@ -245,7 +218,7 @@ contract QVMACI is QVMACIBase, DomainObjs {
             revert ALLOCATION_NOT_ENDED();
         }
 
-        if (!isTallied()) {
+        if (!tally.isTallied()) {
             revert VotesNotTallied();
         }
         if (bytes(tallyHash).length == 0) {
@@ -297,7 +270,6 @@ contract QVMACI is QVMACIBase, DomainObjs {
         uint256 _spentVoiceCreditsHash,
         uint256 _perVOSpentVoiceCreditsHash
     ) external onlyCoordinator {
-
         (Poll poll, Tally tally) = getMaciContracts();
 
         (, , , uint8 voteOptionTreeDepth) = poll.treeDepths();

@@ -15,9 +15,24 @@ import {
 import { MaxValues, TreeDepths } from "maci-core"
 import { G1Point, G2Point } from "maci-crypto"
 import { VerifyingKey } from "maci-domainobjs"
-import { ethers } from "hardhat"
-import { ERC20, QVMaciStrategy, MACIFactory } from "../typechain-types"
+import { ethers, upgrades } from "hardhat"
+import {
+    ERC20,
+    QVMACI,
+    ClonableMACI,
+    ClonableAccQueueQuinaryBlankSl,
+    ClonableAccQueueQuinaryMaci,
+    ClonablePoll,
+    ClonableMessageProcessor,
+    ClonableTally,
+} from "../typechain-types"
 import { EthereumProvider } from "hardhat/types"
+import { create } from "domain"
+import dotenv from "dotenv"
+import { libraries } from "../typechain-types/contracts/core"
+dotenv.config()
+
+const PRIVATE_KEY = process.env.PRIVATE_KEY
 
 export const duration = 20
 
@@ -59,8 +74,7 @@ export const treeDepths: TreeDepths = {
 export const tallyBatchSize = STATE_TREE_ARITY ** treeDepths.intStateTreeDepth
 
 export interface ITestContracts {
-    MACIFactory: MACIFactory
-    QVMaciStrategy: QVMaciStrategy
+    QVMaciStrategy: QVMACI
     vkRegistryContract: VkRegistry
     verifierContract: MockVerifier
 }
@@ -69,24 +83,47 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     const verifierContract = await deployMockVerifier(undefined, true)
     const vkRegistryContract = await deployVkRegistry(undefined, true)
 
-    const { PoseidonT3Contract, PoseidonT4Contract, PoseidonT5Contract, PoseidonT6Contract } =
-        await deployPoseidonContracts(undefined, undefined, true)
+    const verifierContractAddress = await verifierContract.getAddress()
+    const vkRegistryContractAddress = await vkRegistryContract.getAddress()
 
-    const poseidonAddrs = await Promise.all([
-        PoseidonT3Contract.getAddress(),
-        PoseidonT4Contract.getAddress(),
-        PoseidonT5Contract.getAddress(),
-        PoseidonT6Contract.getAddress(),
-    ]).then(([poseidonT3, poseidonT4, poseidonT5, poseidonT6]) => ({
-        poseidonT3,
-        poseidonT4,
-        poseidonT5,
-        poseidonT6,
-    }))
+    console.log("Verifier deployed at : ", verifierContractAddress)
+    console.log("VkRegistry deployed at : ", vkRegistryContractAddress)
+
+    // const { PoseidonT3Contract, PoseidonT4Contract, PoseidonT5Contract, PoseidonT6Contract } =
+    //     await deployPoseidonContracts(undefined, undefined, true)
+
+    // const poseidonAddrs = await Promise.all([
+    //     PoseidonT3Contract.getAddress(),
+    //     PoseidonT4Contract.getAddress(),
+    //     PoseidonT5Contract.getAddress(),
+    //     PoseidonT6Contract.getAddress(),
+    // ]).then(([poseidonT3, poseidonT4, poseidonT5, poseidonT6]) => ({
+    //     poseidonT3,
+    //     poseidonT4,
+    //     poseidonT5,
+    //     poseidonT6,
+    // }))
+
+    const poseidonAddrs = {
+        poseidonT3: "0x04f061257fCbBC83761Fb08bb8b4097f6e7d08db",
+        poseidonT4: "0x7E09e01ECf81d40d855a9e4C4e74CB84ab7173d9",
+        poseidonT5: "0xDb59ba01588227aD9013478E1B5D5fBb3505dE0e",
+        poseidonT6: "0x233C59079C51caA207E79CD42e40f83fd2FC6455",
+    }
 
     console.log(poseidonAddrs)
 
-    const contractsToLink = ["MACIFactory", "PollFactory", "MessageProcessorFactory", "TallyFactory"]
+    const contractsToLink = [
+        "ClonablePoll",
+        "ClonableMessageProcessor",
+        "ClonableTally",
+        "ClonableMACI",
+        "ClonableAccQueueQuinaryBlankSl",
+        "ClonableAccQueueQuinaryMaci",
+        "PollFactory",
+        "MessageProcessorFactory",
+        "TallyFactory",
+    ]
 
     // Link Poseidon contracts to MACI
     const linkedContractFactories = await Promise.all(
@@ -108,22 +145,47 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     const DAI = await ethers.getContractFactory("dai")
     const DAI_INSTANCE = DAI.attach("0x8d573a4EBe0AC93d9cBCF1A3046C91DbF2ADD45A")
 
-    const [MACIFactoryFactory, pollFactoryContractFactory, messageProcessorFactory, tallyFactory] =
-        await Promise.all(linkedContractFactories)
+    const [
+        ClonablePollFactory,
+        ClonableMessageProcessorFactory,
+        ClonableTallyFactory,
+        ClonableMACIFactory,
+        ClonableAccQueueQuinaryBlankSlFactory,
+        ClonableAccQueueQuinaryMaciFactory,
+        // pollFactoryContractFactory,
+        // messageProcessorFactory,
+        // tallyFactory,
+    ] = await Promise.all(linkedContractFactories)
 
-    const pollFactoryContract = await deployContractWithLinkedLibraries<PollFactory>(
-        pollFactoryContractFactory,
+    const pollFactoryContract = await deployContractWithLinkedLibraries<ClonablePoll>(ClonablePollFactory, "", true)
+
+    const messageProcessorFactoryContract = await deployContractWithLinkedLibraries<ClonableMessageProcessor>(
+        ClonableMessageProcessorFactory,
         "",
         true,
     )
 
-    const messageProcessorFactoryContract = await deployContractWithLinkedLibraries<MessageProcessorFactory>(
-        messageProcessorFactory,
-        "",
+    const tallyFactoryContract = await deployContractWithLinkedLibraries<ClonableTally>(ClonableTallyFactory, "", true)
+
+    const ClonableAccQueueQuinaryBlankSl = await deployContractWithLinkedLibraries<ClonableAccQueueQuinaryBlankSl>(
+        ClonableAccQueueQuinaryBlankSlFactory,
+        "ClonableAccQueueQuinaryBlankSl",
         true,
     )
 
-    const tallyFactoryContract = await deployContractWithLinkedLibraries<TallyFactory>(tallyFactory, "", true)
+    const ClonableAccQueueQuinaryBlankSlAddress = await ClonableAccQueueQuinaryBlankSl.getAddress()
+
+    console.log("ClonableAccQueueQuinaryBlankSlAddress deployed at : ", ClonableAccQueueQuinaryBlankSlAddress)
+
+    const ClonableAccQueueQuinaryMaci = await deployContractWithLinkedLibraries<ClonableAccQueueQuinaryMaci>(
+        ClonableAccQueueQuinaryMaciFactory,
+        "ClonableAccQueueQuinaryMaci",
+        true,
+    )
+
+    const ClonableAccQueueQuinaryMaciAddress = await ClonableAccQueueQuinaryMaci.getAddress()
+
+    console.log("ClonableAccQueueQuinaryMaciAddress deployed at : ", ClonableAccQueueQuinaryMaciAddress)
 
     const [pollAddr, mpAddr, tallyAddr] = await Promise.all([
         pollFactoryContract.getAddress(),
@@ -131,32 +193,52 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
         tallyFactoryContract.getAddress(),
     ])
 
-    const MACIFactory = await deployContractWithLinkedLibraries<MACIFactory>(
-        MACIFactoryFactory,
-        "MACIFactory",
-        true,
-        vkRegistryContract,
-        {
-            pollFactory: pollAddr,
-            tallyFactory: tallyAddr,
-            subsidyFactory: tallyAddr,
-            messageProcessorFactory: mpAddr,
-        },
-        verifierContract,
+    // const pollAddr = "0xF8F779dc7089f181E5D9d351CB31ad1433F95320"
+    // const mpAddr = "0xE9502C439390d1f587f0ddAdac9643F5BB534a02"
+    // const tallyAddr = "0x5ba3DDe546FDA7953689a5801a92eFc81C804372"
+
+    console.log("PollFactory deployed at : ", pollAddr)
+    console.log("MessageProcessorFactory deployed at : ", mpAddr)
+    console.log("TallyFactory deployed at : ", tallyAddr)
+
+    // --------------------------------------------------  Clonable MACI  --------------------------------------------------
+
+    const ClonableMACI = await deployContractWithLinkedLibraries<ClonableMACI>(
+        ClonableMACIFactory,
+        "ClonableMACI",
+        true
     )
 
-    const MACIFactoryAddress = await MACIFactory.getAddress()
+    const ClonableMACIAddress = await ClonableMACI.getAddress()
 
-    console.log("MACIFactory deployed at : ", MACIFactoryAddress)
+    console.log("ClonableMACIAddress deployed at : ", ClonableMACIAddress)
 
-    const QVMaciRegistryFactory = await ethers.getContractFactory("QVMaciRegistry")
-    const QVMaciRegistry = await QVMaciRegistryFactory.deploy(AlloRegistry, Allo, MACIFactoryAddress)
 
-    const QVMaciRegistryAddress = await QVMaciRegistry.getAddress()
+    const _ClonableMACIFactory = await ethers.getContractFactory("ClonableMACIFactory")
 
-    console.log("QVMACIRegistry deployed at : ", QVMaciRegistryAddress)
+    const __ClonableMACIFactory = await upgrades.deployProxy(_ClonableMACIFactory, [
+        STATE_TREE_DEPTH,
+        treeDepths,
+        verifierContractAddress,
+        vkRegistryContractAddress,
+        ClonableMACIAddress,
+        ClonableAccQueueQuinaryBlankSlAddress,
+        ClonableAccQueueQuinaryMaciAddress,
+        pollAddr,
+        tallyAddr,
+        mpAddr,
+    ])
 
-    // set the verification keys on the vk smart contract
+    const ClonableMACIFactoryAddress = await __ClonableMACIFactory.getAddress()
+
+    console.log("ClonableMACIFactoryAddress deployed at : ", ClonableMACIFactoryAddress)
+
+    // const setClonableMACIAddress = await __ClonableMACIFactory.setClonableMaciImplementation(ClonableMACIAddress)
+
+    // const setClonableMACIAddressReceipt = await setClonableMACIAddress.wait()
+
+    // console.log("ClonableMaciImplementation set Successfully")
+
     await vkRegistryContract.setVerifyingKeys(
         STATE_TREE_DEPTH,
         treeDepths.intStateTreeDepth,
@@ -167,47 +249,88 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
         testTallyVk.asContractParam() as IVerifyingKeyStruct,
     )
 
-    // const __MACIFactory = await ethers.getContractFactory("MACIFactory")
+    const QVMaciStrategyFactory = await ethers.getContractFactory("QVMACI")
 
-    // const _MACIFactory = __MACIFactory.attach(MACIFactoryAddress)
-
-    const setMacyParams = await MACIFactory.setMaciParameters(STATE_TREE_DEPTH, treeDepths)
-    await setMacyParams.wait()
-
-    console.log("MACIFactory setMaciParameters done")
-
-    const QVMaciStrategyFactory = await ethers.getContractFactory("QVMaciStrategy")
-    const QVMaciStrategy = await QVMaciStrategyFactory.deploy(Allo, "QVMaciStrategy 2")
+    const QVMaciStrategy = await QVMaciStrategyFactory.deploy(Allo, "QVMACI", ClonableMACIFactoryAddress)
 
     const QVMaciStrategyAddress = await QVMaciStrategy.getAddress()
 
-    // const getMaciFactory = await QVMaciStrategy._maciFactory()
-
-    // console.log("MACIFactory deployed at : ", getMaciFactory)
-
     console.log("QVMaciStrategy deployed at : ", QVMaciStrategyAddress)
 
-    // const QVMaciStrategy = await deployContractWithLinkedLibraries<MACIFactory>(
-    //     MACIFactoryFactory,
-    //     "QVMaciStrategy",
-    //     true,
-    //     QVMaciRegistryAddress,
-    //     Allo,
-    //     "QVMaciStrategy 1",
-    //     pollAddr,
-    //     mpAddr,
-    //     tallyAddr,
-    //     QVMaciRegistryAddress,
-    //     STATE_TREE_DEPTH,
-    //     treeDepths,
-    //     verifierContract,
-    //     vkRegistryContract,
-    // )
+    const createStrategyFactory = await ethers.getContractFactory("CreateStrategy")
 
-    // console.log("QVMaciStrategy deployed at : ", await QVMaciStrategy.getAddress())
+    const createStrategy = await createStrategyFactory.deploy(
+        Allo,
+        AlloRegistry,
+        QVMaciStrategyAddress,
+        ClonableMACIFactoryAddress,
+    )
+
+    const createStrategyAddress = await createStrategy.getAddress()
+
+    console.log("CreateStrategy deployed at : ", createStrategyAddress)
+
+    const time = await createStrategy.getTime()
+
+    console.log("Time : ", time)
+
+    const signer = new ethers.Wallet(PRIVATE_KEY, ethers.provider)
+
+    console.log("Signer : ", signer.address)
+    let initializeParams = {
+        registryGating: true,
+        metadataRequired: true,
+        reviewThreshold: BigInt(1),
+        registrationStartTime: BigInt(time + BigInt(100)),
+        registrationEndTime: BigInt(time + BigInt(200)),
+        allocationStartTime: BigInt(time + BigInt(200)),
+        allocationEndTime: BigInt(time + BigInt(500)),
+        maxVoiceCreditsPerAllocator: BigInt(100),
+    }
+
+    try {
+        const createPool = await createStrategy.createQVMaciPool(
+            initializeParams,
+            // coordinator:
+            signer.address,
+            // coordinatorPubKey:
+            {
+                x: BigInt("21888242871839275222246405745257275088548364400416034343698204186575808495611"),
+                y: BigInt("21888242871839275222246405745257275088548364400416034343698204186575808495611"),
+            },
+        )
+        const poolAddress = await createPool.wait()
+        console.log("Pool Address : ", poolAddress)
+    } catch (error) {
+        console.log("Error : ", error)
+    }
+
+    const poolAddress = await createStrategy.strategies(0)
+
+    console.log("Pool Address : ", poolAddress)
+
+    const poolMaciInfo = await createStrategy.strategyToMaciParams(poolAddress)
+
+    console.log("Pool Maci Info : ", poolMaciInfo)
+
+    const QVMACI_instance = QVMaciStrategyFactory.attach(poolAddress)
+
+    const maci = await QVMACI_instance._maci()
+
+    console.log("MACI deployed at : ", maci)
+
+    const macifac = await QVMACI_instance.maciFactory()
+
+    console.log("maciFactory defined in : ", macifac)
+
+    const ClonableMACI_instance = await ethers.getContractAt("ClonableMACI", maci)
+
+    const vkReg = await ClonableMACI_instance.vkRegistry()
+
+    console.log("VkRegistry defined in : ", vkReg)
+
 
     return {
-        MACIFactory,
         QVMaciStrategy,
         vkRegistryContract,
         verifierContract,

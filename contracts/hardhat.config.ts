@@ -1,5 +1,6 @@
 import "@nomicfoundation/hardhat-toolbox"
 import "hardhat-artifactor"
+import "@openzeppelin/hardhat-upgrades"
 
 import type { HardhatUserConfig } from "hardhat/config"
 
@@ -65,7 +66,7 @@ const config: HardhatUserConfig = {
         settings: {
             optimizer: {
                 enabled: true,
-                runs: 10,
+                runs: 200,
             },
         },
     },
