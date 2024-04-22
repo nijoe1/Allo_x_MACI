@@ -7,6 +7,8 @@ import { BaseStrategy } from "../BaseStrategy.sol";
 // External Libraries
 import { Multicall } from "@openzeppelin/contracts/utils/Multicall.sol";
 
+import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
+
 import { Contrants, Metadata, IRegistry, IAllo } from "./interfaces/Contrants.sol";
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -28,6 +30,7 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Contrants {
     /// ======================
     /// ======= Storage ======
     /// ======================
+    using Counters for Counters.Counter;
 
     // slot 0
     /// @notice The total number of votes cast for all recipients
@@ -64,6 +67,8 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Contrants {
 
     /// @notice The registry contract
     IRegistry private _registry;
+
+    Counters.Counter private _recipientCounter;
 
     // slots [4...n]
     /// @notice The status of the recipient for this strategy only
@@ -244,7 +249,7 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Contrants {
      */
     function getVoiceCredits(address /* _caller */, bytes memory _data) public view returns (uint256) {
         address user = abi.decode(_data, (address));
-        if (_isValidAllocator(user)) {
+        if (!_isValidAllocator(user)) {
             return 0;
         }
         return maxVoiceCreditsPerAllocator;
@@ -523,9 +528,11 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Contrants {
     /// @notice Add a recipient to the MACI contract
     /// @param _recipientId The ID of the recipient
     function addRecipient(address _recipientId) internal {
-        uint256 recipientIndex = uint256(keccak256(abi.encode(_recipientId)));
+        _recipientCounter.increment();
+        uint256 recipientIndex = _recipientCounter.current();
         recipientIdToIndex[_recipientId] = recipientIndex;
         recipientIndexToAddress[recipientIndex] = _recipientId;
+        emit RecipientVotingOptionAdded(_recipientId, recipientIndex);
     }
 
     /// @notice Get the payout for a single recipient

@@ -1,6 +1,6 @@
-import { expect } from "chai"
+import { expect, use } from "chai"
 import { ethers } from "hardhat"
-import { AbiCoder, Signer, ZeroAddress, type BigNumberish } from "ethers"
+import { AbiCoder, BytesLike, Signer, ZeroAddress, keccak256, type BigNumberish } from "ethers"
 
 import { Keypair, Message, PCommand, PubKey } from "maci-domainobjs"
 import { ITallyCircuitInputs, MaciState, Poll } from "maci-core"
@@ -16,160 +16,213 @@ import {
 
 import type { EthereumProvider } from "hardhat/types"
 
-import { QVMaciStrategy } from "../typechain-types"
+import { QVMACI, ClonableMACI, ClonablePoll, ClonableTally, ClonableMessageProcessor, Allo } from "../typechain-types"
 import { STATE_TREE_DEPTH, deployTestContracts, maxValues, messageBatchSize, timeTravel, treeDepths } from "./utils"
-import { QVMaciStrategyInterface } from "../typechain-types/contracts/strategies/qv-maci/QVMaciStrategy"
+import { QVMACIInterface } from "../typechain-types/contracts/strategies/qv-maci/QVMACI"
+import { ClonableMACIInterface } from "../typechain-types/contracts/ClonableMaciContracts/ClonableMACI"
 
 describe("e2e", function test() {
     this.timeout(90000000)
 
-    let QVMaciStrategy: QVMaciStrategy
+    let QVMaciStrategy: QVMACI
     let QVMaciStrategyAddress: string
     let token: ERC20
 
     let owner: Signer
-    let user: Signer
+    let allocator: Signer
+    let recipient1: Signer
+    let recipient2: Signer
     let ownerAddress: string
 
     // create a new user keypair
     const keypair = new Keypair()
     const coordinatorKeypair = new Keypair()
 
-    let iface: QVMaciStrategyInterface
-
+    let iface: QVMACIInterface
+    let ifaceClonableMACI: ClonableMACIInterface
     let verifierContract: MockVerifier
     let vkRegistryContract: VkRegistry
+    let maciContract: ClonableMACI
+    let pollContract: ClonablePoll
+    let tallyContract: ClonableTally
+    let mpContract: ClonableMessageProcessor
+    let AlloContract: Allo
 
     const signupAmount = 100_000_000_000_000n
 
     before(async () => {
-        ;[owner, user] = await ethers.getSigners()
+        ;[owner] = await ethers.getSigners()
 
         ownerAddress = await owner.getAddress()
 
         const contracts = await deployTestContracts()
 
-        QVMaciStrategy = contracts.QVMaciStrategy
+        AlloContract = contracts.Allo
+        QVMaciStrategy = contracts.QVMACI_STRATEGY
+        pollContract = contracts.pollContract
         verifierContract = contracts.verifierContract
         vkRegistryContract = contracts.vkRegistryContract
-
+        maciContract = contracts.maciContract
         QVMaciStrategyAddress = await QVMaciStrategy.getAddress()
+        allocator = contracts.user1
+        recipient1 = contracts.user2
+        recipient2 = contracts.user3
 
         iface = QVMaciStrategy.interface
+        ifaceClonableMACI = maciContract.interface
     })
 
     describe("deployment", function () {
         it("should have deployed a new MinimalQf instance", async () => {
             expect(await QVMaciStrategy.getAddress()).to.not.be.undefined
-            // expect(await QVMaciStrategy.stateTreeDepth()).to.eq(6n)
+            expect(await maciContract.stateTreeDepth()).to.eq(6n)
         })
     })
 
-    // describe("addFundingSource", () => {
-    //     it("should allow the admin to add a funding source and emit an event", async () => {
-    //         await expect(minimalQF.addFundingSource(ownerAddress))
-    //             .to.emit(minimalQF, "FundingSourceAdded")
-    //             .withArgs(ownerAddress)
-    //     })
+    describe("Add Allocator", () => {
+        it("Pool Admin should allowlist an allocator", async () => {
+            const tx = await QVMaciStrategy.addAllocator(await allocator.getAddress())
 
-    //     it("should throw if the caller is not the admin", async () => {
-    //         await expect(minimalQF.connect(user).addFundingSource(ownerAddress)).to.be.revertedWith(
-    //             "Ownable: caller is not the owner",
-    //         )
-    //     })
-    // })
+            const receipt = await tx.wait()
 
-    // describe("signup", () => {
-    //     it("should allow to signup a user", async () => {
-    //         const userBalanceBefore = await token.balanceOf(ownerAddress)
-    //         await token.connect(owner).approve(minimalQFAddress, signupAmount)
-    //         const tx = await minimalQF
-    //             .connect(owner)
-    //             .signUp(
-    //                 keypair.pubKey.asContractParam(),
-    //                 AbiCoder.defaultAbiCoder().encode(["uint256"], [1n]),
-    //                 AbiCoder.defaultAbiCoder().encode(["uint256"], [signupAmount]),
-    //             )
+            expect(receipt?.status).to.eq(1)
 
-    //         // balance check
-    //         const userBalanceAfter = await token.balanceOf(ownerAddress)
-    //         expect(userBalanceBefore - userBalanceAfter).to.eq(signupAmount)
+            // emit AllocatorAdded(_allocator, msg.sender);
 
-    //         const receipt = await tx.wait()
+            // Store the state index
+            const log = receipt!.logs[receipt!.logs.length - 1]
+            const event = iface.parseLog(log as unknown as { topics: string[]; data: string }) as unknown as {
+                args: {
+                    allocator: string
+                    sender: string
+                }
+            }
 
-    //         expect(receipt?.status).to.eq(1)
+            expect(event.args.sender).to.eq(ownerAddress)
+            expect(event.args.allocator).to.eq(await allocator.getAddress())
+        })
+    })
 
-    //         // Store the state index
-    //         const log = receipt!.logs[receipt!.logs.length - 1]
-    //         const event = iface.parseLog(log as unknown as { topics: string[]; data: string }) as unknown as {
-    //             args: {
-    //                 _stateIndex: BigNumberish
-    //                 _voiceCreditBalance: BigNumberish
-    //             }
-    //         }
+    describe("signup", () => {
+        it("should allow to signup a user", async () => {
+            const tx = await QVMaciStrategy.connect(allocator).signup(keypair.pubKey.asContractParam())
 
-    //         expect(event.args._stateIndex).to.eq(1n)
-    //         expect(event.args._voiceCreditBalance).to.eq(signupAmount / BigInt(10e8))
-    //     })
-    // })
+            const receipt = await tx.wait()
 
-    // describe("deployPoll", () => {
-    //     it("should deploy a new QF round and related contracts", async () => {
-    //         await minimalQF.deployPoll(
-    //             100n,
-    //             treeDepths,
-    //             coordinatorKeypair.pubKey.asContractParam(),
-    //             await verifierContract.getAddress(),
-    //             await vkRegistryContract.getAddress(),
-    //             false,
-    //         )
-    //     })
+            expect(receipt?.status).to.eq(1)
 
-    //     it("should prevent from init tally again", async () => {
-    //         const tally = await minimalQF.tally()
-    //         const contract = await ethers.getContractAt("MinimalQFTally", tally)
+            // Store the state index
+            const log = receipt!.logs[receipt!.logs.length - 1]
+            const event = ifaceClonableMACI.parseLog(
+                log as unknown as { topics: string[]; data: string },
+            ) as unknown as {
+                args: {
+                    _stateIndex: BigNumberish
+                    _voiceCreditBalance: BigNumberish
+                }
+            }
 
-    //         await expect(contract.initialize(ZeroAddress, ZeroAddress, ZeroAddress)).to.be.revertedWithCustomError(
-    //             contract,
-    //             "AlreadyInit",
-    //         )
-    //     })
-    // })
+            expect(event.args._stateIndex).to.eq(1n)
+            expect(event.args._voiceCreditBalance).to.eq(100n)
+        })
+    })
 
-    // describe("publish message", () => {
-    //     it("should allow to publish a message", async () => {
-    //         const roundAddr = await minimalQF.polls(0)
+    describe("registerRecipient", () => {
+        it("should allow anyone to register their project", async () => {
+            let recipientAddress = await recipient1.getAddress()
+            let data = AbiCoder.defaultAbiCoder().encode(
+                ["address", "address", "(uint256,string)"],
+                [recipientAddress, ZeroAddress, [1n, "Project 1"]],
+            )
+            const tx = await AlloContract.connect(recipient1).registerRecipient(1n, data)
 
-    //         const round = Poll__factory.connect(roundAddr, owner)
+            const receipt = await tx.wait()
 
-    //         const keypair = new Keypair()
+            expect(receipt?.status).to.eq(1)
+            // event Registered(address indexed recipientId, bytes data, address sender);
 
-    //         const command = new PCommand(1n, keypair.pubKey, 0n, 9n, 1n, 0n, 0n)
+            // Store the state index
+            const log = receipt!.logs[receipt!.logs.length - 1]
+            const event = iface.parseLog(log as unknown as { topics: string[]; data: string }) as unknown as {
+                args: {
+                    recipientId: string
+                    data: BytesLike
+                    sender: string
+                }
+            }
 
-    //         const signature = command.sign(keypair.privKey)
-    //         const sharedKey = Keypair.genEcdhSharedKey(keypair.privKey, coordinatorKeypair.pubKey)
-    //         const message = command.encrypt(signature, sharedKey)
-    //         await round.publishMessage(message, keypair.pubKey.asContractParam())
-    //     })
+            expect(event.args.recipientId).to.eq(recipientAddress)
+            expect(event.args.data).to.eq(data)
+            expect(event.args.sender).to.eq(recipientAddress)
+        })
+    })
 
-    //     it("should allow to publish a batch of messages", async () => {
-    //         const roundAddr = await minimalQF.polls(0)
-    //         const round = Poll__factory.connect(roundAddr, owner)
+    describe("reviewRecipient", () => {
+        it("should allow the pool admin to review the project recipient", async () => {
+            let recipientAddress = await recipient1.getAddress()
+            let status = 2 // Accepted
 
-    //         const keypair = new Keypair()
+            const tx = await QVMaciStrategy.connect(owner).reviewRecipients([recipientAddress], [status])
 
-    //         const command = new PCommand(1n, keypair.pubKey, 0n, 9n, 1n, 0n, 0n)
+            // const votingIndexBytes = AbiCoder.defaultAbiCoder().encode(["address"], [recipientAddress])
+            // const votingIndex = ethers.utils.keccak256(votingIndexBytes) as BytesLike
 
-    //         const signature = command.sign(keypair.privKey)
-    //         const sharedKey = Keypair.genEcdhSharedKey(keypair.privKey, coordinatorKeypair.pubKey)
-    //         const message = command.encrypt(signature, sharedKey)
+            const receipt = await tx.wait()
 
-    //         const messages = new Array(84).fill(message.asContractParam())
-    //         const keys = new Array(84).fill(keypair.pubKey.asContractParam())
+            expect(receipt?.status).to.eq(1)
 
-    //         await round.publishMessageBatch(messages, keys, { gasLimit: 30000000 })
-    //     })
-    // })
+            const votingOption = (await QVMaciStrategy.connect(owner).recipientIdToIndex(recipientAddress))
+
+            // event RecipientVotingOptionAdded(address recipientId, uint256 recipientIndex);
+
+            const log = receipt!.logs[receipt!.logs.length - 1]
+            const event = iface.parseLog(log as unknown as { topics: string[]; data: string }) as unknown as {
+                args: {
+                    recipientId: string
+                    recipientIndex: BytesLike
+                }
+            }
+
+            expect(event.args.recipientId).to.eq(recipientAddress)
+            // expect(event.args.recipientIndex).to.eq(votingOption)
+        })
+    })
+
+    describe("publish message", () => {
+        it("should allow to publish a message", async () => {
+            const keypair = new Keypair()
+
+            let recipientAddress = await recipient1.getAddress()
+
+            const votingOption = await QVMaciStrategy.connect(owner).recipientIdToIndex(recipientAddress)
+
+            const command = new PCommand(1n, keypair.pubKey, votingOption, 9n, 1n, 0n, 0n)
+
+            const signature = command.sign(keypair.privKey)
+            const sharedKey = Keypair.genEcdhSharedKey(keypair.privKey, coordinatorKeypair.pubKey)
+            const message = command.encrypt(signature, sharedKey)
+            await pollContract.connect(allocator).publishMessage(message, keypair.pubKey.asContractParam())
+        })
+
+        it("should allow to publish a batch of messages", async () => {
+            const keypair = new Keypair()
+
+            let recipientAddress = await recipient1.getAddress()
+
+            const votingOption = await QVMaciStrategy.connect(owner).recipientIdToIndex(recipientAddress)
+
+            const command = new PCommand(1n, keypair.pubKey, votingOption, 9n, 1n, 0n, 0n)
+
+            const signature = command.sign(keypair.privKey)
+            const sharedKey = Keypair.genEcdhSharedKey(keypair.privKey, coordinatorKeypair.pubKey)
+            const message = command.encrypt(signature, sharedKey)
+
+            const messages = new Array(10).fill(message.asContractParam())
+            const keys = new Array(10).fill(keypair.pubKey.asContractParam())
+
+            await pollContract.connect(allocator).publishMessageBatch(messages, keys, { gasLimit: 30000000 })
+        })
+    })
 
     // describe("recipientRegistry", () => {
     //     it("should allow the owner to add a recipient", async () => {

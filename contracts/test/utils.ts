@@ -16,7 +16,7 @@ import { MaxValues, TreeDepths } from "maci-core"
 import { G1Point, G2Point } from "maci-crypto"
 import { VerifyingKey } from "maci-domainobjs"
 import { ethers, upgrades } from "hardhat"
-import { utils } from "ethers"
+import { Signer } from "ethers"
 import {
     ERC20,
     Allo,
@@ -36,6 +36,9 @@ import { libraries } from "../typechain-types/contracts/core"
 dotenv.config()
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY
+const PRIVATE_KEY_USER1 = process.env.PRIVATE_KEY_USER1
+const PRIVATE_KEY_USER2 = process.env.PRIVATE_KEY_USER2
+const PRIVATE_KEY_USER3 = process.env.PRIVATE_KEY_USER3
 
 export const duration = 20
 
@@ -77,9 +80,17 @@ export const treeDepths: TreeDepths = {
 export const tallyBatchSize = STATE_TREE_ARITY ** treeDepths.intStateTreeDepth
 
 export interface ITestContracts {
-    QVMaciStrategy: QVMACI
+    Allo: Allo
+    QVMACI_STRATEGY: QVMACI
     vkRegistryContract: VkRegistry
     verifierContract: MockVerifier
+    maciContract: ClonableMACI
+    pollContract: ClonablePoll
+    messageProcessorContract: ClonableMessageProcessor
+    tallyContract: ClonableTally
+    user1: Signer
+    user2: Signer
+    user3: Signer
 }
 
 export const deployAlloContracts = async () => {
@@ -157,9 +168,6 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
         "ClonableMACI",
         "ClonableAccQueueQuinaryBlankSl",
         "ClonableAccQueueQuinaryMaci",
-        "PollFactory",
-        "MessageProcessorFactory",
-        "TallyFactory",
     ]
 
     // Link Poseidon contracts to MACI
@@ -322,10 +330,10 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     console.log("Time : ", time)
 
     let initializeParams = [
-        true,
+        false,
         true,
         BigInt(1),
-        BigInt(time + BigInt(100)),
+        BigInt(time + BigInt(1)),
         BigInt(time + BigInt(200)),
         BigInt(time + BigInt(200)),
         BigInt(time + BigInt(500)),
@@ -375,10 +383,12 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     const createPoolReceipt = await createPool.wait()
 
     const poolAddress = await (await AlloContracts.Allo.getPool(1)).strategy
-    
+
     console.log("Pool Address : ", poolAddress)
 
     const QVMACI_instance = QVMaciStrategyFactory.attach(poolAddress)
+
+    const QVMACI_STRATEGY = await ethers.getContractAt("QVMACI", poolAddress)
 
     const maci = await QVMACI_instance._maci()
 
@@ -388,11 +398,29 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
 
     console.log("_pollContracts: ", pollContracts)
 
+    let maciContract2 = (await ethers.getContractAt("ClonableMACI", maci)) as ClonableMACI
+
+    console.log("MACI deployed at : ", await maciContract2.stateTreeDepth())
+
+    const signer2 = new ethers.Wallet(PRIVATE_KEY_USER1, ethers.provider) as Signer
+    const signer3 = new ethers.Wallet(PRIVATE_KEY_USER2, ethers.provider) as Signer
+    const signer4 = new ethers.Wallet(PRIVATE_KEY_USER3, ethers.provider) as Signer
 
     return {
-        QVMaciStrategy,
+        Allo: AlloContracts.Allo,
+        QVMACI_STRATEGY,
         vkRegistryContract,
         verifierContract,
+        maciContract: (await ethers.getContractAt("ClonableMACI", maci)) as ClonableMACI,
+        pollContract: (await ethers.getContractAt("ClonablePoll", pollContracts[0])) as ClonablePoll,
+        messageProcessorContract: (await ethers.getContractAt(
+            "ClonableMessageProcessor",
+            pollContracts[1],
+        )) as ClonableMessageProcessor,
+        tallyContract: (await ethers.getContractAt("ClonableTally", pollContracts[2])) as ClonableTally,
+        user1: signer2,
+        user2: signer3,
+        user3: signer4,
     }
 }
 

@@ -78,6 +78,11 @@ contract Contrants {
     /// @param subsidy The subsidy contract address
     event MaciSet(address maci, address poll, address messageProcessor, address tally, address subsidy);
 
+    /// @notice Emitted when a recipient is added
+    /// @param recipientId ID of the recipient
+    /// @param recipientIndex ID of the recipient"s MACI voting option
+    event RecipientVotingOptionAdded(address recipientId, uint256 recipientIndex);
+
     /// @notice Emitted when the tally hash is published
     /// @param tallyHash The IPFS hash of the tally
     event TallyPublished(string tallyHash);
