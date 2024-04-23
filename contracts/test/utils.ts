@@ -91,6 +91,8 @@ export interface ITestContracts {
     user1: Signer
     user2: Signer
     user3: Signer
+
+    poolDeployTime?: number
 }
 
 export const deployAlloContracts = async () => {
@@ -330,13 +332,21 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     console.log("Time : ", time)
 
     let initializeParams = [
+        // RegistryGatting
         false,
+        // MetadataRequired
         true,
+        // ReviewThreshold
         BigInt(1),
+        // RegistrationStartTime
         BigInt(time + BigInt(1)),
+        // RegistrationEndTime
         BigInt(time + BigInt(200)),
+        // AllocationStartTime
         BigInt(time + BigInt(200)),
+        // AllocationEndTime
         BigInt(time + BigInt(500)),
+        // MaxVoiceCreditsPerAllocator
         BigInt(100),
     ]
 
@@ -358,7 +368,7 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     let AbiCoder = new ethers.AbiCoder()
 
     let bytes = AbiCoder.encode(types, [initStruct])
-    // console.log("Bytes : ", bytes)
+
     // bytes32 _profileId,
     // address _strategy,
     // bytes memory _initStrategyData,
@@ -381,6 +391,9 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     // Get the receipt of the create pool transaction the _strategy and console log it
     // emit PoolCreated(poolId, _profileId, _strategy, _token, _amount, _metadata);
     const createPoolReceipt = await createPool.wait()
+
+    const block = await signer.provider!.getBlock(createPoolReceipt!.blockHash)
+    const deployTime = block!.timestamp
 
     const poolAddress = await (await AlloContracts.Allo.getPool(1)).strategy
 
@@ -421,6 +434,8 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
         user1: signer2,
         user2: signer3,
         user3: signer4,
+
+        poolDeployTime: deployTime,
     }
 }
 
