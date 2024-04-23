@@ -12,7 +12,7 @@ import { IStrategy } from "../../../core/interfaces/IStrategy.sol";
 // Internal Libraries
 import { Metadata } from "../../../core/libraries/Metadata.sol";
 
-contract Contrants {
+contract Constants {
     uint256 public constant TREE_ARITY = 5;
 
     /// ======================

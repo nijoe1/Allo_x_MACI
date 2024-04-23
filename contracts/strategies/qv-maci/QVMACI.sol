@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.19;
 
+// MACI Contracts & Libraries
 import { ClonableMACIFactory } from "../../ClonableMaciContracts/ClonableMACIFactory.sol";
 
-// Core Contracts
-import { QVMACIBase } from "./QVMACIBase.sol";
-
-// MACI Contracts & Libraries
 import { DomainObjs } from "maci-contracts/contracts/utilities/DomainObjs.sol";
+
+import { ClonableMACI } from "../../ClonableMaciContracts/ClonableMACI.sol";
+
+import { Params } from "maci-contracts/contracts/utilities/Params.sol";
 
 import { Tally } from "maci-contracts/contracts/Tally.sol";
 
 import { Poll } from "maci-contracts/contracts/Poll.sol";
 
-import { ClonableMACI } from "../../ClonableMaciContracts/ClonableMACI.sol";
-
-import { Params } from "maci-contracts/contracts/utilities/Params.sol";
+// Core Contracts
+import { QVMACIBase } from "./QVMACIBase.sol";
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
