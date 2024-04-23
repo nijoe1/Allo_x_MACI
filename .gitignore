@@ -1,6 +1,12 @@
 node_modules
 .env
 
+# Package manager lock files
+bun.lockb
+yarn.lock
+package-lock.json
+
+
 # Hardhat files
 /cache
 /artifacts
@@ -12,6 +18,3 @@ node_modules
 # solidity-coverage files
 /coverage
 /coverage.json
-
-bun.lockb
-yarn.lock
