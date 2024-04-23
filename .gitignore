@@ -13,5 +13,5 @@ node_modules
 /coverage
 /coverage.json
 
-/bun.lockb
-/yarn.lock
+bun.lockb
+yarn.lock
