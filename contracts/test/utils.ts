@@ -1,11 +1,7 @@
 import {
     IVerifyingKeyStruct,
-    MessageProcessorFactory,
-    PollFactory,
-    TallyFactory,
     VkRegistry,
     deployPoseidonContracts,
-    deployTopupCredit,
     deployVkRegistry,
     linkPoseidonLibraries,
     deployContractWithLinkedLibraries,

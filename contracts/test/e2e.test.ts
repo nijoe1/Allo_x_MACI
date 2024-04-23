@@ -15,6 +15,12 @@ import {
     VkRegistry,
 } from "maci-contracts"
 
+import {
+    addTallyResultsBatch,
+    createMessage,
+    
+  } from './utils/maci'
+
 import { DEFAULT_CIRCUIT } from "./utils/circuits"
 
 import { MaciParameters } from "./utils/maciParameters"
@@ -25,7 +31,7 @@ import { UNIT, ALPHA_PRECISION, DEFAULT_GET_LOG_BATCH_SIZE, DEFAULT_SR_QUEUE_OPS
 
 import { getIpfsHash } from "./utils/ipfs"
 
-import { mergeMessages, mergeSignups, genProofs, proveOnChain, GenProofsArgs, genLocalState, verify } from "maci-cli"
+import { mergeMessages, mergeSignups, genProofs, proveOnChain, GenProofsArgs, genLocalState, verify} from "maci-cli"
 
 import type { EthereumProvider } from "hardhat/types"
 
@@ -33,6 +39,7 @@ import { QVMACI, ClonableMACI, ClonablePoll, ClonableTally, ClonableMessageProce
 import { STATE_TREE_DEPTH, deployTestContracts, maxValues, messageBatchSize, timeTravel, treeDepths } from "./utils"
 import { QVMACIInterface } from "../typechain-types/contracts/strategies/qv-maci/QVMACI"
 import { ClonableMACIInterface } from "../typechain-types/contracts/ClonableMaciContracts/ClonableMACI"
+import path from "path"
 
 /**
  * Merge MACI message and signups subtrees
@@ -410,8 +417,6 @@ describe("e2e", function test() {
 
         let deployTime: number
 
-        const signupAmount = 100_000_000_000_000n
-
         before(async () => {
             ;[owner] = await ethers.getSigners()
 
@@ -419,156 +424,177 @@ describe("e2e", function test() {
 
             const contracts = await deployTestContracts()
 
-            // AlloContract = contracts.Allo
-            // QVMaciStrategy = contracts.QVMACI_STRATEGY
-            // pollContract = contracts.pollContract
-            // tallyContract = contracts.tallyContract
-            // mpContract = contracts.messageProcessorContract
-            // verifierContract = contracts.verifierContract
-            // vkRegistryContract = contracts.vkRegistryContract
-            // maciContract = contracts.maciContract
-            // QVMaciStrategyAddress = await QVMaciStrategy.getAddress()
-            // allocator = contracts.user1
-            // recipient1 = contracts.user2
-            // recipient2 = contracts.user3
+            AlloContract = contracts.Allo
+            QVMaciStrategy = contracts.QVMACI_STRATEGY
+            pollContract = contracts.pollContract
+            tallyContract = contracts.tallyContract
+            mpContract = contracts.messageProcessorContract
+            verifierContract = contracts.verifierContract
+            vkRegistryContract = contracts.vkRegistryContract
+            maciContract = contracts.maciContract
+            QVMaciStrategyAddress = await QVMaciStrategy.getAddress()
+            allocator = contracts.user1
+            recipient1 = contracts.user2
+            recipient2 = contracts.user3
 
-            // iface = QVMaciStrategy.interface
-            // ifaceClonableMACI = maciContract.interface
+            iface = QVMaciStrategy.interface
+            ifaceClonableMACI = maciContract.interface
 
-            // const deployTime = contracts.poolDeployTime || 0
+            const deployTime = contracts.poolDeployTime || 0
 
-            // const pollId = maciState.deployPoll(
-            //     BigInt(deployTime) + 500n,
-            //     maxValues,
-            //     {
-            //         ...treeDepths,
-            //         intStateTreeDepth: treeDepths.intStateTreeDepth,
-            //     },
-            //     messageBatchSize,
-            //     coordinatorKeypair,
-            // )
+            const pollId = maciState.deployPoll(
+                BigInt(deployTime) + 500n,
+                maxValues,
+                {
+                    ...treeDepths,
+                    intStateTreeDepth: treeDepths.intStateTreeDepth,
+                },
+                messageBatchSize,
+                coordinatorKeypair,
+            )
 
-            // poll = maciState.polls.get(pollId)!
+            poll = maciState.polls.get(pollId)!
 
-            // let _mpContract = mpContract.connect(owner)
+            let _mpContract = mpContract.connect(owner)
 
-            // // Add allocator
-            // const addAllocatorTx = await QVMaciStrategy.addAllocator(await allocator.getAddress())
-            // await addAllocatorTx.wait()
+            // Add allocator
+            const addAllocatorTx = await QVMaciStrategy.addAllocator(await allocator.getAddress())
+            await addAllocatorTx.wait()
 
-            // // signup
-            // const SignUpTx = await QVMaciStrategy.connect(allocator).signup(keypair.pubKey.asContractParam())
-            // await SignUpTx.wait()
+            // signup
+            const SignUpTx = await QVMaciStrategy.connect(allocator).signup(keypair.pubKey.asContractParam())
+            await SignUpTx.wait()
 
-            // // Register recipient
-            // let recipientAddress = await recipient1.getAddress()
-            // let data = AbiCoder.defaultAbiCoder().encode(
-            //     ["address", "address", "(uint256,string)"],
-            //     [recipientAddress, ZeroAddress, [1n, "Project 1"]],
-            // )
-            // const RecipientRegistrationTx = await AlloContract.connect(recipient1).registerRecipient(1n, data)
-            // await RecipientRegistrationTx.wait()
+            // Register recipient
+            let recipientAddress = await recipient1.getAddress()
+            let data = AbiCoder.defaultAbiCoder().encode(
+                ["address", "address", "(uint256,string)"],
+                [recipientAddress, ZeroAddress, [1n, "Project 1"]],
+            )
+            const RecipientRegistrationTx = await AlloContract.connect(recipient1).registerRecipient(1n, data)
+            await RecipientRegistrationTx.wait()
 
-            // // Review Acccept recipient
-            // let status = 2 // Accepted
-            // const ReviewRecipientTx = await QVMaciStrategy.connect(owner).reviewRecipients([recipientAddress], [status])
-            // await ReviewRecipientTx.wait()
+            // Review Acccept recipient
+            let status = 2 // Accepted
+            const ReviewRecipientTx = await QVMaciStrategy.connect(owner).reviewRecipients([recipientAddress], [status])
+            await ReviewRecipientTx.wait()
 
-            // // create 1 message for the recipient
-            // const votingOption = await QVMaciStrategy.connect(owner).recipientIdToIndex(recipientAddress)
-            // const command = new PCommand(1n, keypair.pubKey, votingOption, 9n, 1n, 0n, 0n)
-            // const signature = command.sign(keypair.privKey)
-            // const sharedKey = Keypair.genEcdhSharedKey(keypair.privKey, coordinatorKeypair.pubKey)
-            // const message = command.encrypt(signature, sharedKey)
-            // const messageContractParam = message.asContractParam()
+            // create 1 message for the recipient
+            const votingOption = await QVMaciStrategy.connect(owner).recipientIdToIndex(recipientAddress)
+            const command = new PCommand(1n, keypair.pubKey, votingOption, 9n, 1n, 0n, 0n)
+            const signature = command.sign(keypair.privKey)
+            const sharedKey = Keypair.genEcdhSharedKey(keypair.privKey, coordinatorKeypair.pubKey)
+            const message = command.encrypt(signature, sharedKey)
+            const messageContractParam = message.asContractParam()
 
-            // // update the poll state
-            // poll.updatePoll(BigInt(maciState.stateLeaves.length))
+            // update the poll state
+            poll.updatePoll(BigInt(maciState.stateLeaves.length))
 
-            // // merge the trees
-            // const _pollContract = pollContract.connect(owner)
+            // merge the trees
+            const _pollContract = pollContract.connect(owner)
 
-            // // publish message on chain and locally
-            // const nothing = new Message(1n, [
-            //     8370432830353022751713833565135785980866757267633941821328460903436894336785n,
-            //     0n,
-            //     0n,
-            //     0n,
-            //     0n,
-            //     0n,
-            //     0n,
-            //     0n,
-            //     0n,
-            //     0n,
-            // ])
+            // publish message on chain and locally
+            const nothing = new Message(1n, [
+                8370432830353022751713833565135785980866757267633941821328460903436894336785n,
+                0n,
+                0n,
+                0n,
+                0n,
+                0n,
+                0n,
+                0n,
+                0n,
+                0n,
+            ])
 
-            // const encP = new PubKey([
-            //     10457101036533406547632367118273992217979173478358440826365724437999023779287n,
-            //     19824078218392094440610104313265183977899662750282163392862422243483260492317n,
-            // ])
-            // poll.publishMessage(nothing, encP)
+            const encP = new PubKey([
+                10457101036533406547632367118273992217979173478358440826365724437999023779287n,
+                19824078218392094440610104313265183977899662750282163392862422243483260492317n,
+            ])
+            poll.publishMessage(nothing, encP)
 
-            // poll.publishMessage(message, keypair.pubKey)
+            poll.publishMessage(message, keypair.pubKey)
 
-            // await _pollContract.publishMessage(messageContractParam, keypair.pubKey.asContractParam())
+            await _pollContract.publishMessage(messageContractParam, keypair.pubKey.asContractParam())
 
-            // await timeTravel(owner.provider as unknown as EthereumProvider, 600)
+            await timeTravel(owner.provider as unknown as EthereumProvider, 600)
 
-            // await _pollContract.mergeMaciStateAqSubRoots(0n, 0n)
-            // await _pollContract.mergeMaciStateAq(0n)
+            await _pollContract.mergeMaciStateAqSubRoots(0n, 0n)
+            await _pollContract.mergeMaciStateAq(0n)
 
-            // await _pollContract.mergeMessageAqSubRoots(0n)
-            // await _pollContract.mergeMessageAq()
+            await _pollContract.mergeMessageAqSubRoots(0n)
+            await _pollContract.mergeMessageAq()
 
-            // const processMessagesInputs = poll.processMessages(pollId)
+            const processMessagesInputs = poll.processMessages(pollId)
 
-            // await _mpContract.processMessages(processMessagesInputs.newSbCommitment, [0, 0, 0, 0, 0, 0, 0, 0])
+            await _mpContract.processMessages(processMessagesInputs.newSbCommitment, [0, 0, 0, 0, 0, 0, 0, 0])
 
-            // const maciAddress = await maci.getAddress()
-            // await mergeMaciSubtrees({
-            //   maciAddress,
-            //   pollId,
-            //   numQueueOps: DEFAULT_SR_QUEUE_OPS,
-            //   signer: owner,
-            // })
+            const maciAddress = await maciContract.getAddress()
+            await mergeMaciSubtrees({
+                maciAddress,
+                pollId,
+                numQueueOps: DEFAULT_SR_QUEUE_OPS,
+                signer: owner,
+            })
 
-            // const random = Math.floor(Math.random() * 10 ** 8)
-            // const outputDir = path.join(proofOutputDirectory, `${random}`)
-            // if (!existsSync(outputDir)) {
-            //   mkdirSync(outputDir, { recursive: true })
-            // }
+            const random = Math.floor(Math.random() * 10 ** 8)
+            const outputDir = path.join(proofOutputDirectory, `${random}`)
+            if (!existsSync(outputDir)) {
+                mkdirSync(outputDir, { recursive: true })
+            }
 
-            // // past an end block that's later than the MACI start block
-            // const genProofArgs = getGenProofArgs({
-            //   maciAddress,
-            //   pollId,
-            //   coordinatorMacisk: coordinatorKeypair.privKey.serialize(),
-            //   rapidsnark,
-            //   circuitType: circuit,
-            //   circuitDirectory,
-            //   outputDir,
-            //   blocksPerBatch: DEFAULT_GET_LOG_BATCH_SIZE,
-            //   maciTxHash: maciTransactionHash,
-            //   signer: owner,
-            //   quiet,
-            // })
+            // past an end block that's later than the MACI start block
+            const genProofArgs = getGenProofArgs({
+                maciAddress,
+                pollId,
+                coordinatorMacisk: coordinatorKeypair.privKey.serialize(),
+                rapidsnark,
+                circuitType: circuit,
+                circuitDirectory,
+                outputDir,
+                blocksPerBatch: DEFAULT_GET_LOG_BATCH_SIZE,
+                maciTxHash: maciTransactionHash,
+                signer: owner,
+                quiet,
+            })
 
-            // await genProofs(genProofArgs)
+            await genProofs(genProofArgs)
 
-            // const tallyAddress = await tallyContract.getAddress()
-            // const messageProcessorAddress  = await mpContract.getAddress()
+            const tallyAddress = await tallyContract.getAddress()
+            const messageProcessorAddress = await mpContract.getAddress()
 
-            // // Submit proofs to MACI contract
-            // await proveOnChain({
-            //   pollId,
-            //   proofDir: genProofArgs?.outputDir || "",
-            //   subsidyEnabled: false,
-            //   maciAddress,
-            //   messageProcessorAddress,
-            //   tallyAddress,
-            //   signer: owner,
-            //   quiet,
-            // })
+            let quiet = true as any
+
+            // Submit proofs to MACI contract
+            await proveOnChain({
+                pollId,
+                proofDir: genProofArgs?.outputDir || "",
+                subsidyEnabled: false,
+                maciAddress,
+                messageProcessorAddress,
+                tallyAddress,
+                signer: owner,
+                quiet
+                // true
+            })
+
+            console.log("finished proveOnChain")
+
+            const tally = JSONFile.read(genProofArgs?.tallyFile) as any
+            const tallyHash = await getIpfsHash(tally)
+            await QVMaciStrategy.connect(owner).publishTallyHash(tallyHash)
+            console.log("Tally hash", tallyHash)
+
+            // add tally results to funding round
+            const recipientTreeDepth = treeDepths.voteOptionTreeDepth
+            console.log("Adding tally result on chain in batches of", tallyBatchSize)
+            await addTallyResultsBatch(
+                QVMaciStrategy.connect(owner) as QVMACI,
+                recipientTreeDepth,
+                tally,
+                tallyBatchSize,
+            )
+            console.log("Finished adding tally results")
         })
 
         // it("should throw when not called by the MinimalQF contract", async () => {
@@ -614,35 +640,35 @@ describe("e2e", function test() {
         //     )
         // })
 
-        // it("should allow the Pool Manager to finalize the round", async () => {
-        //     tallyData = poll.tallyVotes()
+        it("should allow the Pool Manager to finalize the round", async () => {
+            tallyData = poll.tallyVotes()
 
-        //     const tally = tallyContract.connect(owner)
+            const tally = tallyContract.connect(owner)
 
-        //     await tally.tallyVotes(tallyData.newTallyCommitment, [0, 0, 0, 0, 0, 0, 0, 0])
+            await tally.tallyVotes(tallyData.newTallyCommitment, [0, 0, 0, 0, 0, 0, 0, 0])
 
-        //     expect(await tally.isTallied()).to.eq(true)
+            expect(await tally.isTallied()).to.eq(true)
 
-        //     // compute newResultsCommitment
-        //     const newResultsCommitment = genTreeCommitment(
-        //         poll.tallyResult.map((x) => BigInt(x)),
-        //         BigInt(tallyData.newResultsRootSalt),
-        //         treeDepths.voteOptionTreeDepth,
-        //     )
+            // compute newResultsCommitment
+            const newResultsCommitment = genTreeCommitment(
+                poll.tallyResult.map((x) => BigInt(x)),
+                BigInt(tallyData.newResultsRootSalt),
+                treeDepths.voteOptionTreeDepth,
+            )
 
-        //     const newPerVOSpentVoiceCreditsCommitment = genTreeCommitment(
-        //         poll.perVOSpentVoiceCredits.map((x) => BigInt(x)),
-        //         BigInt(tallyData.newPerVOSpentVoiceCreditsRootSalt!),
-        //         treeDepths.voteOptionTreeDepth,
-        //     )
+            const newPerVOSpentVoiceCreditsCommitment = genTreeCommitment(
+                poll.perVOSpentVoiceCredits.map((x) => BigInt(x)),
+                BigInt(tallyData.newPerVOSpentVoiceCreditsRootSalt!),
+                treeDepths.voteOptionTreeDepth,
+            )
 
-        //     await QVMaciStrategy.finalize(
-        //         poll.totalSpentVoiceCredits,
-        //         tallyData.newSpentVoiceCreditSubtotalSalt,
-        //         newResultsCommitment,
-        //         newPerVOSpentVoiceCreditsCommitment,
-        //     )
-        // })
+            await QVMaciStrategy.finalize(
+                poll.totalSpentVoiceCredits,
+                tallyData.newSpentVoiceCreditSubtotalSalt,
+                newResultsCommitment,
+                newPerVOSpentVoiceCreditsCommitment,
+            )
+        })
 
         // it("should not allow to finalize twice", async () => {
         //     const tally = await newMinimalQf.tally()
