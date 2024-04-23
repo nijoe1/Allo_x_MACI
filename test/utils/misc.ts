@@ -1,5 +1,5 @@
-import path from 'path'
-import fs from 'fs'
+import path from "path";
+import fs from "fs";
 
 /**
  * Get the tally file path
@@ -7,7 +7,7 @@ import fs from 'fs'
  * @returns The tally file path
  */
 export function getTalyFilePath(outputDir: string) {
-  return path.join(outputDir, 'tally.json')
+  return path.join(outputDir, "tally.json");
 }
 
 /**
@@ -16,7 +16,7 @@ export function getTalyFilePath(outputDir: string) {
  * @returns The path of the MACI state file
  */
 export function getMaciStateFilePath(directory: string) {
-  return path.join(directory, 'maci-state.json')
+  return path.join(directory, "maci-state.json");
 }
 
 /**
@@ -25,7 +25,7 @@ export function getMaciStateFilePath(directory: string) {
  * @returns true if the path exists
  */
 export function isPathExist(path: string): boolean {
-  return fs.existsSync(path)
+  return fs.existsSync(path);
 }
 
 /**
@@ -34,5 +34,5 @@ export function isPathExist(path: string): boolean {
  * @returns The directory of the file
  */
 export function getDirname(file: string): string {
-  return path.dirname(file)
+  return path.dirname(file);
 }

@@ -1,4 +1,4 @@
-import fs from 'fs'
+import fs from "fs";
 
 /**
  * Used by JSON.stringify to convert bigint to string
@@ -7,10 +7,10 @@ import fs from 'fs'
  * @returns formated value
  */
 function replacer(_key: string, value: any) {
-  if (typeof value === 'bigint') {
-    return value.toString()
+  if (typeof value === "bigint") {
+    return value.toString();
   }
-  return value
+  return value;
 }
 
 export class JSONFile {
@@ -20,7 +20,7 @@ export class JSONFile {
    * @returns
    */
   static read(path: string) {
-    return JSON.parse(fs.readFileSync(path).toString())
+    return JSON.parse(fs.readFileSync(path).toString());
   }
 
   /**
@@ -29,13 +29,13 @@ export class JSONFile {
    * @param data The new data to add to the JSON content
    */
   static update(path: string, data: any) {
-    let state: any
+    let state: any;
     try {
-      state = JSONFile.read(path)
+      state = JSONFile.read(path);
     } catch {
-      state = {}
+      state = {};
     }
-    fs.writeFileSync(path, JSON.stringify({ ...state, ...data }, null, 2))
+    fs.writeFileSync(path, JSON.stringify({ ...state, ...data }, null, 2));
   }
 
   /**
@@ -44,7 +44,7 @@ export class JSONFile {
    * @param data The data to write
    */
   static write(path: string, data: any) {
-    const outputString = JSON.stringify(data, replacer, 2)
-    fs.writeFileSync(path, outputString + '\n')
+    const outputString = JSON.stringify(data, replacer, 2);
+    fs.writeFileSync(path, outputString + "\n");
   }
 }

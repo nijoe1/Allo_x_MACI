@@ -9,6 +9,5 @@ integrated into Allo protocol QF mechanism
 
 ### This takes inspiration from :
 
-   - clr.fund code (https://github.com/clrfund/monorepo)
-   - [ctrlc03](https://github.com/ctrlc03) minimalQF code https://github.com/ctrlc03/minimalQF
-
+- clr.fund code (https://github.com/clrfund/monorepo)
+- [ctrlc03](https://github.com/ctrlc03) minimalQF code https://github.com/ctrlc03/minimalQF

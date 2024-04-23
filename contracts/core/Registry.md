@@ -4,31 +4,31 @@ The `Registry` contract is a fundamental component of the Allo ecosystem, enabli
 
 ## Table of Contents
 
--   [Registry.sol](#registrysol)
-    -   [Table of Contents](#table-of-contents)
-    -   [Sequence Diagrams](#sequence-diagrams)
-        -   [Creating A Profile](#creating-a-profile)
-        -   [Updates Profile](#updates-profile)
-        -   [Member Management](#member-management)
-        -   [Profile Owner Transfer](#profile-owner-transfer)
-    -   [Smart Contract Overview](#smart-contract-overview)
-        -   [Storage Variables](#storage-variables)
-        -   [Modifiers](#modifiers)
-        -   [Constructor](#constructor)
-        -   [External/Public Functions](#externalpublic-functions)
-        -   [Internal Functions](#internal-functions)
-        -   [Actors](#actors)
-    -   [User Flows](#user-flows)
-        -   [Create a Profile](#create-a-profile)
-        -   [Update Profile Name and Anchor](#update-profile-name-and-anchor)
-        -   [Update Profile Metadata](#update-profile-metadata)
-        -   [Add Members to Profile](#add-members-to-profile)
-        -   [Remove Members from Profile](#remove-members-from-profile)
-        -   [Update Pending Owner](#update-pending-owner)
-        -   [Accept Profile Ownership](#accept-profile-ownership)
-        -   [Retrieve Profile Information](#retrieve-profile-information)
-        -   [Check Ownership and Membership](#check-ownership-and-membership)
-        -   [Recover Funds](#recover-funds)
+- [Registry.sol](#registrysol)
+  - [Table of Contents](#table-of-contents)
+  - [Sequence Diagrams](#sequence-diagrams)
+    - [Creating A Profile](#creating-a-profile)
+    - [Updates Profile](#updates-profile)
+    - [Member Management](#member-management)
+    - [Profile Owner Transfer](#profile-owner-transfer)
+  - [Smart Contract Overview](#smart-contract-overview)
+    - [Storage Variables](#storage-variables)
+    - [Modifiers](#modifiers)
+    - [Constructor](#constructor)
+    - [External/Public Functions](#externalpublic-functions)
+    - [Internal Functions](#internal-functions)
+    - [Actors](#actors)
+  - [User Flows](#user-flows)
+    - [Create a Profile](#create-a-profile)
+    - [Update Profile Name and Anchor](#update-profile-name-and-anchor)
+    - [Update Profile Metadata](#update-profile-metadata)
+    - [Add Members to Profile](#add-members-to-profile)
+    - [Remove Members from Profile](#remove-members-from-profile)
+    - [Update Pending Owner](#update-pending-owner)
+    - [Accept Profile Ownership](#accept-profile-ownership)
+    - [Retrieve Profile Information](#retrieve-profile-information)
+    - [Check Ownership and Membership](#check-ownership-and-membership)
+    - [Recover Funds](#recover-funds)
 
 ## Sequence Diagrams
 
@@ -102,10 +102,10 @@ sequenceDiagram
 
 ## Smart Contract Overview
 
--   **License:** The `Registry` contract adheres to the MIT License, promoting permissive open-source usage.
--   **Solidity Version:** Developed using Solidity version 0.8.19, harnessing the latest advancements in Ethereum smart contract technology.
--   **External Libraries:** The contract incorporates the `AccessControl` and `CREATE3` external libraries, enhancing access control and facilitating contract deployment.
--   **Interfaces:** The contract utilizes the `IRegistry` interface for communication with external components.
+- **License:** The `Registry` contract adheres to the MIT License, promoting permissive open-source usage.
+- **Solidity Version:** Developed using Solidity version 0.8.19, harnessing the latest advancements in Ethereum smart contract technology.
+- **External Libraries:** The contract incorporates the `AccessControl` and `CREATE3` external libraries, enhancing access control and facilitating contract deployment.
+- **Interfaces:** The contract utilizes the `IRegistry` interface for communication with external components.
 
 ### Storage Variables
 
@@ -116,7 +116,7 @@ sequenceDiagram
 
 ### Modifiers
 
--   `onlyProfileOwner(bytes32 _profileId)`: A modifier ensuring that only the owner of a specific profile can access a function.
+- `onlyProfileOwner(bytes32 _profileId)`: A modifier ensuring that only the owner of a specific profile can access a function.
 
 ### Constructor
 
@@ -146,10 +146,10 @@ The contract constructor initializes the Allo owner role and assigns the provide
 
 ### Actors
 
--   **Allo Owner:** The Allo owner possesses the ability to recover funds, perform upgrades, and manage the contract's overarching aspects.
--   **Profile Owner:** A user who owns a profile can perform actions such as updating profile attributes, managing members, and transferring ownership.
--   **Profile Member:** Members of a profile have specific access rights as defined by the profile's owner.
--   **Pending Owner:** The address designated as the pending owner can assume ownership of the profile once the current owner confirms the transfer.
+- **Allo Owner:** The Allo owner possesses the ability to recover funds, perform upgrades, and manage the contract's overarching aspects.
+- **Profile Owner:** A user who owns a profile can perform actions such as updating profile attributes, managing members, and transferring ownership.
+- **Profile Member:** Members of a profile have specific access rights as defined by the profile's owner.
+- **Pending Owner:** The address designated as the pending owner can assume ownership of the profile once the current owner confirms the transfer.
 
 In summary, the `Registry` smart contract provides a comprehensive system for creating and managing profiles within the Allo ecosystem. It offers functionalities such as profile creation, metadata updates, ownership management, and fund recovery. By leveraging a combination of storage variables, modifiers, external functions, and internal functions, the contract contributes to establishing decentralized identity management and access control mechanisms. The `Registry` contract is designed to facilitate the seamless integration of profiles within Ethereum-based decentralized applications, promoting efficiency and security in user interactions and data management.
 
@@ -157,59 +157,59 @@ In summary, the `Registry` smart contract provides a comprehensive system for cr
 
 ### Create a Profile
 
--   User initiates a transaction to the `createProfile` function with the required parameters: `_nonce`, `_name`, `_metadata`, `_owner`, and `_members`.
--   The contract generates a unique `profileId` based on `_nonce` and the caller's address using the `_generateProfileId` function.
--   The contract creates a new `Profile` object containing the provided data and assigns it to the `profilesById` mapping using the generated `profileId`.
--   Roles are granted to the `_members` of the profile using the `_grantRole` function.
--   The contract emits the `ProfileCreated` event to indicate the successful creation of the profile.
+- User initiates a transaction to the `createProfile` function with the required parameters: `_nonce`, `_name`, `_metadata`, `_owner`, and `_members`.
+- The contract generates a unique `profileId` based on `_nonce` and the caller's address using the `_generateProfileId` function.
+- The contract creates a new `Profile` object containing the provided data and assigns it to the `profilesById` mapping using the generated `profileId`.
+- Roles are granted to the `_members` of the profile using the `_grantRole` function.
+- The contract emits the `ProfileCreated` event to indicate the successful creation of the profile.
 
 ### Update Profile Name and Anchor
 
--   The profile owner initiates a transaction to the `updateProfileName` function with the `_profileId` and the new `_name`.
--   The contract generates a new anchor using `_generateAnchor` function and the `_profileId` and `_name`.
--   The contract updates the anchor mapping to remove the old anchor and assigns the new anchor to the profile.
--   The contract emits the `ProfileNameUpdated` event to indicate the successful update of the profile name and anchor.
+- The profile owner initiates a transaction to the `updateProfileName` function with the `_profileId` and the new `_name`.
+- The contract generates a new anchor using `_generateAnchor` function and the `_profileId` and `_name`.
+- The contract updates the anchor mapping to remove the old anchor and assigns the new anchor to the profile.
+- The contract emits the `ProfileNameUpdated` event to indicate the successful update of the profile name and anchor.
 
 ### Update Profile Metadata
 
--   The profile owner initiates a transaction to the `updateProfileMetadata` function with the `_profileId` and the new `_metadata`.
--   The contract updates the metadata of the profile identified by `_profileId`.
--   The contract emits the `ProfileMetadataUpdated` event to indicate the successful update of the profile metadata.
+- The profile owner initiates a transaction to the `updateProfileMetadata` function with the `_profileId` and the new `_metadata`.
+- The contract updates the metadata of the profile identified by `_profileId`.
+- The contract emits the `ProfileMetadataUpdated` event to indicate the successful update of the profile metadata.
 
 ### Add Members to Profile
 
--   The profile owner initiates a transaction to the `addMembers` function with the `_profileId` and an array of `_members`.
--   The contract grants roles to the new members using the `_grantRole` function.
--   The contract emits events to indicate the successful addition of members.
+- The profile owner initiates a transaction to the `addMembers` function with the `_profileId` and an array of `_members`.
+- The contract grants roles to the new members using the `_grantRole` function.
+- The contract emits events to indicate the successful addition of members.
 
 ### Remove Members from Profile
 
--   The profile owner initiates a transaction to the `removeMembers` function with the `_profileId` and an array of `_members`.
--   The contract revokes roles from the members using the `_revokeRole` function.
--   The contract emits events to indicate the successful removal of members.
+- The profile owner initiates a transaction to the `removeMembers` function with the `_profileId` and an array of `_members`.
+- The contract revokes roles from the members using the `_revokeRole` function.
+- The contract emits events to indicate the successful removal of members.
 
 ### Update Pending Owner
 
--   The profile owner initiates a transaction to the `updateProfilePendingOwner` function with the `_profileId` and the new `_pendingOwner`.
--   The contract updates the pending owner for the profile identified by `_profileId`.
--   The contract emits the `ProfilePendingOwnerUpdated` event to indicate the successful update of the pending owner.
+- The profile owner initiates a transaction to the `updateProfilePendingOwner` function with the `_profileId` and the new `_pendingOwner`.
+- The contract updates the pending owner for the profile identified by `_profileId`.
+- The contract emits the `ProfilePendingOwnerUpdated` event to indicate the successful update of the pending owner.
 
 ### Accept Profile Ownership
 
--   The pending owner initiates a transaction to the `acceptProfileOwnership` function with the `_profileId`.
--   The contract checks if the caller is the pending owner of the profile.
--   If the caller is the pending owner, the contract updates the owner of the profile and clears the pending owner.
--   The contract emits the `ProfileOwnerUpdated` event to indicate the successful transfer of ownership.
+- The pending owner initiates a transaction to the `acceptProfileOwnership` function with the `_profileId`.
+- The contract checks if the caller is the pending owner of the profile.
+- If the caller is the pending owner, the contract updates the owner of the profile and clears the pending owner.
+- The contract emits the `ProfileOwnerUpdated` event to indicate the successful transfer of ownership.
 
 ### Retrieve Profile Information
 
--   Users can query profile information using the `getProfileById` and `getProfileByAnchor` functions by providing the `_profileId` or `_anchor`.
+- Users can query profile information using the `getProfileById` and `getProfileByAnchor` functions by providing the `_profileId` or `_anchor`.
 
 ### Check Ownership and Membership
 
--   Users can check if an address is the owner or member of a profile using the `isOwnerOrMemberOfProfile`, `isOwnerOfProfile`, and `isMemberOfProfile` functions.
+- Users can check if an address is the owner or member of a profile using the `isOwnerOrMemberOfProfile`, `isOwnerOfProfile`, and `isMemberOfProfile` functions.
 
 ### Recover Funds
 
--   The allo owner (an address with the ALLO_OWNER role) initiates a transaction to the `recoverFunds` function with the `_token` and `_recipient` addresses.
--   The contract transfers the remaining funds from the contract to the recipient.
+- The allo owner (an address with the ALLO_OWNER role) initiates a transaction to the `recoverFunds` function with the `_token` and `_recipient` addresses.
+- The contract transfers the remaining funds from the contract to the recipient.

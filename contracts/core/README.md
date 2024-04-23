@@ -5,11 +5,11 @@ Welcome to the documentation for the Allo Ecosystem Contracts. This repository c
 ## Contracts
 
 1. [Allo.sol](./Allo.sol): The Allo contract is at the core of the ecosystem, facilitating decentralized fund allocation, distribution, and management. It supports customizable strategies, fee handling, and various user interactions.
-    - [Read Full Documentation](./Allo.md)
+   - [Read Full Documentation](./Allo.md)
 2. [Anchor.sol](./Anchor.sol): The Anchor contract enhances the capabilities of Allo profiles by enabling controlled execution of calls to external addresses. It ensures secure and authorized interactions while leveraging the Allo Registry for access control.
-    - [Read Full Documentation](./Anchor.md)
+   - [Read Full Documentation](./Anchor.md)
 3. [Registry.sol](./Registry.sol): The Registry contract serves as the identity and access control hub of the ecosystem. It allows users to create profiles, manage ownership, and control member access. The contract plays a crucial role in establishing decentralized identity management.
-    - [Read Full Documentation](./Registry.md)
+   - [Read Full Documentation](./Registry.md)
 
 ## Usage
 

@@ -1,7 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const Hash = require('ipfs-only-hash')
-import { FetchRequest } from 'ethers'
-import { DEFAULT_IPFS_GATEWAY } from './constants'
+const Hash = require("ipfs-only-hash");
+import { FetchRequest } from "ethers";
+import { DEFAULT_IPFS_GATEWAY } from "./constants";
 
 /**
  * Get the ipfs hash for the input object
@@ -9,8 +9,8 @@ import { DEFAULT_IPFS_GATEWAY } from './constants'
  * @returns the ipfs hash
  */
 export async function getIpfsHash(object: any): Promise<string> {
-  const data = Buffer.from(JSON.stringify(object, null, 4))
-  return await Hash.of(data)
+  const data = Buffer.from(JSON.stringify(object, null, 4));
+  return await Hash.of(data);
 }
 
 export class Ipfs {
@@ -21,9 +21,9 @@ export class Ipfs {
    * @returns the content
    */
   static async fetchJson(hash: string, gatewayUrl?: string): Promise<any> {
-    const url = `${gatewayUrl || DEFAULT_IPFS_GATEWAY}/ipfs/${hash}`
-    const req = new FetchRequest(url)
-    const resp = await req.send()
-    return resp.bodyJson
+    const url = `${gatewayUrl || DEFAULT_IPFS_GATEWAY}/ipfs/${hash}`;
+    const req = new FetchRequest(url);
+    const resp = await req.send();
+    return resp.bodyJson;
   }
 }
