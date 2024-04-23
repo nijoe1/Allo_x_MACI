@@ -11,3 +11,14 @@ integrated into Allo protocol QF mechanism
 
 - clr.fund code (https://github.com/clrfund/monorepo)
 - [ctrlc03](https://github.com/ctrlc03) minimalQF code https://github.com/ctrlc03/minimalQF
+
+## How to run it
+
+- `yarn install`
+- `npx hardhat node`
+    - `copy 4 private-keys and paste them into .env.example`
+    - `rename .env.example to .env`
+- `open a new terminal`
+- `yarn test:live`
+
+
