@@ -13,19 +13,24 @@ import { existsSync, mkdirSync } from "fs";
 
 import { Keypair, Message, PCommand, PubKey } from "maci-domainobjs";
 import { ITallyCircuitInputs, MaciState, Poll } from "maci-core";
-import { genTreeCommitment } from "maci-crypto";
+import {
+  genTreeCommitment,
+  genTreeCommitment as genTallyResultCommitment,
+  genRandomSalt,
+} from "maci-crypto";
 import {
   ERC20,
   MessageProcessor,
   MessageProcessor__factory,
   MockVerifier,
+  Verifier,
   Poll__factory,
   VkRegistry,
 } from "maci-contracts";
 
 import { addTallyResultsBatch, createMessage } from "./utils/maci";
 
-import { DEFAULT_CIRCUIT } from "./utils/circuits";
+import { DEFAULT_CIRCUIT, getCircuitFiles } from "./utils/circuits";
 
 import { MaciParameters } from "./utils/maciParameters";
 
@@ -48,6 +53,8 @@ import {
   GenProofsArgs,
   genLocalState,
   verify,
+  TallyData,
+  publish,
 } from "maci-cli";
 
 import type { EthereumProvider } from "hardhat/types";
@@ -70,7 +77,13 @@ import {
 } from "./utils";
 import { QVMACIInterface } from "../typechain-types/contracts/strategies/qv-maci/QVMACI";
 import { ClonableMACIInterface } from "../typechain-types/contracts/ClonableMaciContracts/ClonableMACI";
+
+import { getTalyFilePath, isPathExist } from "./utils/misc";
 import path from "path";
+
+import { genMaciStateFromContract } from "maci-contracts";
+
+import os from "os";
 
 /**
  * Merge MACI message and signups subtrees
@@ -111,69 +124,20 @@ export async function mergeMaciSubtrees({
     quiet,
   });
 }
-/* Input to getGenProofArgs() */
-type getGenProofArgsInput = {
-  maciAddress: string;
-  pollId: bigint;
-  // coordinator's MACI serialized secret key
-  coordinatorMacisk: string;
-  // the transaction hash of the creation of the MACI contract
-  maciTxHash?: string;
-  // the key get zkeys file mapping, see utils/circuits.ts
-  circuitType: string;
-  circuitDirectory: string;
-  rapidsnark?: string;
-  // where the proof will be produced
-  outputDir: string;
-  // number of blocks of logs to fetch per batch
-  blocksPerBatch: number;
-  // fetch logs from MACI from these start and end blocks
-  startBlock?: number;
-  endBlock?: number;
-  // MACI state file
-  maciStateFile?: string;
-  // transaction signer
-  signer: Signer;
-  // flag to turn on verbose logging in MACI cli
-  quiet?: boolean;
-};
 
 // MACI zkFiles
 const circuit = process.env.CIRCUIT_TYPE || DEFAULT_CIRCUIT;
-const circuitDirectory = process.env.CIRCUIT_DIRECTORY || "./params";
-const rapidsnark = process.env.RAPID_SNARK || "~/rapidsnark/package/bin/prover";
+const circuitDirectory = process.env.CIRCUIT_DIRECTORY || "./../zkeys/zkeys";
 const proofOutputDirectory = process.env.PROOF_OUTPUT_DIR || "./proof_output";
 const tallyBatchSize = Number(process.env.TALLY_BATCH_SIZE || 8);
 
-/*
- * Get the arguments to pass to the genProof function
- */
-export function getGenProofArgs(args: getGenProofArgsInput) {
-  //  : GenProofsArgs {
-  const {
-    maciAddress,
-    pollId,
-    coordinatorMacisk,
-    maciTxHash,
-    circuitType,
-    circuitDirectory,
-    rapidsnark,
-    outputDir,
-    blocksPerBatch,
-    startBlock,
-    endBlock,
-    maciStateFile,
-    signer,
-    quiet,
-  } = args;
-}
+describe("e2e", () => {
+  let mpContract: MessageProcessor;
+  let poll: Poll;
 
-describe("e2e", function test() {
-  this.timeout(90000000);
-
+  let tallyData: ITallyCircuitInputs;
   let QVMaciStrategy: QVMACI;
   let QVMaciStrategyAddress: string;
-  let token: ERC20;
 
   let Coordinator: Signer;
   let allocator: Signer;
@@ -183,30 +147,34 @@ describe("e2e", function test() {
 
   // create a new user keypair
   const keypair = new Keypair();
-  const coordinatorKeypair = new Keypair();
-
+  let coordinatorKeypair: Keypair;
+  let proofOutputDirectory = "proofs";
+  let DEFAULT_GET_LOG_BATCH_SIZE = 1000;
+  let maciTransactionHash: string;
   let iface: QVMACIInterface;
   let ifaceClonableMACI: ClonableMACIInterface;
-  let verifierContract: MockVerifier;
+  let verifierContract: Verifier;
   let vkRegistryContract: VkRegistry;
   let maciContract: ClonableMACI;
   let pollContract: ClonablePoll;
   let tallyContract: ClonableTally;
-  let mpContract: ClonableMessageProcessor;
   let AlloContract: Allo;
 
-  const signupAmount = 100_000_000_000_000n;
+  let deployTime: number;
+
+  let quiet = true as any;
 
   before(async () => {
     [Coordinator] = await ethers.getSigners();
 
     CoordinatorAddress = await Coordinator.getAddress();
-
     const contracts = await deployTestContracts();
 
     AlloContract = contracts.Allo;
     QVMaciStrategy = contracts.QVMACI_STRATEGY;
     pollContract = contracts.pollContract;
+    tallyContract = contracts.tallyContract;
+    mpContract = contracts.messageProcessorContract;
     verifierContract = contracts.verifierContract;
     vkRegistryContract = contracts.vkRegistryContract;
     maciContract = contracts.maciContract;
@@ -214,583 +182,197 @@ describe("e2e", function test() {
     allocator = contracts.user1;
     recipient1 = contracts.user2;
     recipient2 = contracts.user3;
+    maciTransactionHash = contracts.maciTransitionHash || "";
+    coordinatorKeypair = contracts.CoordinatorKeypair;
 
     iface = QVMaciStrategy.interface;
     ifaceClonableMACI = maciContract.interface;
+
+    let _mpContract = mpContract.connect(Coordinator);
+
+    // Add allocator
+    const addAllocatorTx = await QVMaciStrategy.addAllocator(
+      await allocator.getAddress()
+    );
+    await addAllocatorTx.wait();
+
+    // signup
+    const SignUpTx = await QVMaciStrategy.connect(allocator).signup(
+      keypair.pubKey.asContractParam()
+    );
+    await SignUpTx.wait();
+
+    // Register recipient
+    let recipientAddress = await recipient1.getAddress();
+    let data = AbiCoder.defaultAbiCoder().encode(
+      ["address", "address", "(uint256,string)"],
+      [recipientAddress, ZeroAddress, [1n, "Project 1"]]
+    );
+    const RecipientRegistrationTx = await AlloContract.connect(
+      recipient1
+    ).registerRecipient(1n, data);
+    await RecipientRegistrationTx.wait();
+
+    // Review Acccept recipient
+    let status = 2; // Accepted
+    const ReviewRecipientTx = await QVMaciStrategy.connect(
+      Coordinator
+    ).reviewRecipients([recipientAddress], [status]);
+    await ReviewRecipientTx.wait();
+
+    // create 1 message for the recipient
+    const votingOption =
+      await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
+        recipientAddress
+      );
+    const command = new PCommand(
+      1n,
+      keypair.pubKey,
+      votingOption,
+      9n,
+      0n,
+      0n,
+      0n
+    );
+    const signature = command.sign(keypair.privKey);
+    const sharedKey = Keypair.genEcdhSharedKey(
+      keypair.privKey,
+      coordinatorKeypair.pubKey
+    );
+    const message = command.encrypt(signature, sharedKey);
+    const messageContractParam = message.asContractParam();
+
+    // merge the trees
+    const _pollContract = pollContract.connect(Coordinator);
+
+    await _pollContract.publishMessage(
+      messageContractParam,
+      keypair.pubKey.asContractParam()
+    );
+
+    const maciAddress = await maciContract.getAddress();
+
+    await timeTravel(Coordinator.provider as unknown as EthereumProvider, 600);
+
+    await mergeMaciSubtrees({
+      maciAddress,
+      // pollId,
+      pollId: 0n,
+      numQueueOps: DEFAULT_SR_QUEUE_OPS,
+      signer: Coordinator,
+    });
+
+    const maciState = await genMaciStateFromContract(
+      Coordinator.provider!,
+      maciAddress,
+      coordinatorKeypair,
+      0n
+    );
+
+    const state = maciState.toJSON();
+
+    const random = Math.floor(Math.random() * 10 ** 8);
+
+    const outputDir = path.join(proofOutputDirectory, `${random}`);
+    if (!existsSync(outputDir)) {
+      mkdirSync(outputDir, { recursive: true });
+    }
+
+    const tallyFile = getTalyFilePath(outputDir);
+
+    const {
+      processZkFile,
+      tallyZkFile,
+      processWitness,
+      processWasm,
+      tallyWitness,
+      tallyWasm,
+    } = getCircuitFiles("micro", circuitDirectory);
+    await genProofs({
+      outputDir: outputDir,
+      tallyFile: tallyFile,
+      tallyZkey: tallyZkFile,
+      processZkey: processZkFile,
+      pollId: 0n,
+      rapidsnark: undefined,
+      processWitgen: processWitness,
+      processDatFile: undefined,
+      tallyWitgen: tallyWitness,
+      tallyDatFile: undefined,
+      coordinatorPrivKey: coordinatorKeypair.privKey.serialize(),
+      maciAddress: maciAddress,
+      transactionHash: maciTransactionHash,
+      processWasm: processWasm,
+      tallyWasm: tallyWasm,
+      useWasm: true,
+      stateFile: undefined,
+      startBlock: undefined,
+      blocksPerBatch: 50,
+      endBlock: undefined,
+      signer: Coordinator,
+      tallyAddress: await tallyContract.getAddress(),
+      useQuadraticVoting: true,
+      quiet: false,
+    } as GenProofsArgs);
+
+    const tallyAddress = await tallyContract.getAddress();
+    const messageProcessorAddress = await mpContract.getAddress();
+
+    // Submit proofs to MACI contract
+    await proveOnChain({
+      pollId: 0n,
+      proofDir: outputDir,
+      subsidyEnabled: false,
+      maciAddress,
+      messageProcessorAddress,
+      tallyAddress,
+      signer: Coordinator,
+      quiet,
+    });
+
+    console.log("finished proveOnChain");
+
+    const tally = JSONFile.read(tallyFile) as any;
+    const tallyHash = await getIpfsHash(tally);
+
+    await QVMaciStrategy.connect(Coordinator).publishTallyHash(tallyHash);
+    console.log("Tally hash", tallyHash);
+
+    // add tally results to funding round
+    const recipientTreeDepth = treeDepths.voteOptionTreeDepth;
+    console.log("Adding tally result on chain in batches of", tallyBatchSize);
+    await addTallyResultsBatch(
+      QVMaciStrategy.connect(Coordinator) as QVMACI,
+      recipientTreeDepth,
+      tally,
+      tallyBatchSize
+    );
+    console.log("Finished adding tally results");
+
+    const newResultCommitment = genTallyResultCommitment(
+      tally.results.tally.map((x: string) => BigInt(x)),
+      BigInt(tally.results.salt),
+      recipientTreeDepth
+    );
+
+    const perVOSpentVoiceCreditsCommitment = genTallyResultCommitment(
+      tally.perVOSpentVoiceCredits.tally.map((x: string) => BigInt(x)),
+      BigInt(tally.perVOSpentVoiceCredits.salt),
+      recipientTreeDepth
+    );
+
+    // Finalize round
+    await QVMaciStrategy.finalize(
+      tally.totalSpentVoiceCredits.spent,
+      tally.totalSpentVoiceCredits.salt,
+      newResultCommitment.toString(),
+      perVOSpentVoiceCreditsCommitment.toString()
+    );
   });
 
-  describe("deployment", function () {
-    it("should have deployed a new MinimalQf instance", async () => {
-      expect(await QVMaciStrategy.getAddress()).to.not.be.undefined;
-      expect(await maciContract.stateTreeDepth()).to.eq(6n);
-    });
-  });
-
-  describe("Add Allocator", () => {
-    it("Pool Admin should allowlist an allocator", async () => {
-      const tx = await QVMaciStrategy.addAllocator(
-        await allocator.getAddress(),
-      );
-
-      const receipt = await tx.wait();
-
-      expect(receipt?.status).to.eq(1);
-
-      // emit AllocatorAdded(_allocator, msg.sender);
-
-      // Store the state index
-      const log = receipt!.logs[receipt!.logs.length - 1];
-      const event = iface.parseLog(
-        log as unknown as { topics: string[]; data: string },
-      ) as unknown as {
-        args: {
-          allocator: string;
-          sender: string;
-        };
-      };
-
-      expect(event.args.sender).to.eq(CoordinatorAddress);
-      expect(event.args.allocator).to.eq(await allocator.getAddress());
-    });
-  });
-
-  describe("signup", () => {
-    it("should allow to signup an allowed allocator", async () => {
-      const tx = await QVMaciStrategy.connect(allocator).signup(
-        keypair.pubKey.asContractParam(),
-      );
-
-      const receipt = await tx.wait();
-
-      expect(receipt?.status).to.eq(1);
-
-      // Store the state index
-      const log = receipt!.logs[receipt!.logs.length - 1];
-      const event = ifaceClonableMACI.parseLog(
-        log as unknown as { topics: string[]; data: string },
-      ) as unknown as {
-        args: {
-          _stateIndex: BigNumberish;
-          _voiceCreditBalance: BigNumberish;
-        };
-      };
-
-      expect(event.args._stateIndex).to.eq(1n);
-      expect(event.args._voiceCreditBalance).to.eq(100n);
-    });
-  });
-
-  describe("registerRecipient", () => {
-    it("should allow anyone to register their project", async () => {
-      let recipientAddress = await recipient1.getAddress();
-      let data = AbiCoder.defaultAbiCoder().encode(
-        ["address", "address", "(uint256,string)"],
-        [recipientAddress, ZeroAddress, [1n, "Project 1"]],
-      );
-      const tx = await AlloContract.connect(recipient1).registerRecipient(
-        1n,
-        data,
-      );
-
-      const receipt = await tx.wait();
-
-      expect(receipt?.status).to.eq(1);
-      // event Registered(address indexed recipientId, bytes data, address sender);
-
-      // Store the state index
-      const log = receipt!.logs[receipt!.logs.length - 1];
-      const event = iface.parseLog(
-        log as unknown as { topics: string[]; data: string },
-      ) as unknown as {
-        args: {
-          recipientId: string;
-          data: BytesLike;
-          sender: string;
-        };
-      };
-
-      expect(event.args.recipientId).to.eq(recipientAddress);
-      expect(event.args.data).to.eq(data);
-      expect(event.args.sender).to.eq(recipientAddress);
-    });
-  });
-
-  describe("reviewRecipient", () => {
-    it("should allow the pool admin to review the project recipient", async () => {
-      let recipientAddress = await recipient1.getAddress();
-      let status = 2; // Accepted
-
-      const tx = await QVMaciStrategy.connect(Coordinator).reviewRecipients(
-        [recipientAddress],
-        [status],
-      );
-
-      // const votingIndexBytes = AbiCoder.defaultAbiCoder().encode(["address"], [recipientAddress])
-      // const votingIndex = ethers.utils.keccak256(votingIndexBytes) as BytesLike
-
-      const receipt = await tx.wait();
-
-      expect(receipt?.status).to.eq(1);
-
-      const votingOption =
-        await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
-          recipientAddress,
-        );
-
-      // event RecipientVotingOptionAdded(address recipientId, uint256 recipientIndex);
-
-      const log = receipt!.logs[receipt!.logs.length - 1];
-      const event = iface.parseLog(
-        log as unknown as { topics: string[]; data: string },
-      ) as unknown as {
-        args: {
-          recipientId: string;
-          recipientIndex: BytesLike;
-        };
-      };
-
-      expect(event.args.recipientId).to.eq(recipientAddress);
-      // expect(event.args.recipientIndex).to.eq(votingOption)
-    });
-  });
-
-  describe("publish message", () => {
-    it("should allow to publish a message", async () => {
-      const keypair = new Keypair();
-
-      let recipientAddress = await recipient1.getAddress();
-
-      const votingOption =
-        await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
-          recipientAddress,
-        );
-
-      const command = new PCommand(
-        1n,
-        keypair.pubKey,
-        votingOption,
-        9n,
-        1n,
-        0n,
-        0n,
-      );
-
-      const signature = command.sign(keypair.privKey);
-      const sharedKey = Keypair.genEcdhSharedKey(
-        keypair.privKey,
-        coordinatorKeypair.pubKey,
-      );
-      const message = command.encrypt(signature, sharedKey);
-      await pollContract
-        .connect(allocator)
-        .publishMessage(message, keypair.pubKey.asContractParam());
-    });
-
-    it("should allow to publish a batch of messages", async () => {
-      const keypair = new Keypair();
-
-      let recipientAddress = await recipient1.getAddress();
-
-      const votingOption =
-        await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
-          recipientAddress,
-        );
-
-      const command = new PCommand(
-        1n,
-        keypair.pubKey,
-        votingOption,
-        9n,
-        1n,
-        0n,
-        0n,
-      );
-
-      const signature = command.sign(keypair.privKey);
-      const sharedKey = Keypair.genEcdhSharedKey(
-        keypair.privKey,
-        coordinatorKeypair.pubKey,
-      );
-      const message = command.encrypt(signature, sharedKey);
-
-      const messages = new Array(10).fill(message.asContractParam());
-      const keys = new Array(10).fill(keypair.pubKey.asContractParam());
-
-      await pollContract
-        .connect(allocator)
-        .publishMessageBatch(messages, keys, { gasLimit: 30000000 });
-    });
-  });
-
-  // describe("recipientRegistry", () => {
-  //     it("should allow the Coordinator to add a recipient", async () => {
-  //         await recipientRegistry.addRecipient(0n, CoordinatorAddress)
-  //     })
-  //     it("should allow the Coordinator to add multiple recipients", async () => {
-  //         await recipientRegistry.addRecipients([CoordinatorAddress, CoordinatorAddress, CoordinatorAddress])
-  //     })
-  //     it("should throw if the caller is not the Coordinator", async () => {
-  //         await expect(recipientRegistry.connect(user).addRecipient(0n, CoordinatorAddress)).to.be.revertedWith(
-  //             "Ownable: caller is not the Coordinator",
-  //         )
-  //     })
-  // })
-
-  // describe("getMatchingFunds", () => {
-  //     it("should return the correct amount of matching funds (amount in the contract)", async () => {
-  //         const funds = await minimalQF.getMatchingFunds()
-  //         expect(funds).to.eq(signupAmount)
-  //     })
-
-  //     it("should return the correct amount of matching funds (amount in the contract + approved tokens by funding source)", async () => {
-  //         await token.connect(Coordinator).approve(minimalQFAddress, signupAmount)
-  //         const funds = await minimalQF.getMatchingFunds()
-  //         expect(funds).to.eq(signupAmount * 2n)
-  //     })
-  // })
-
-  // describe("cancelRound", () => {
-  //     it("should prevent a non Coordinator from cancelling a round", async () => {
-  //         const tally = await minimalQF.tally()
-  //         const contract = await ethers.getContractAt("MinimalQFTally", tally)
-  //         await expect(contract.connect(user).cancelRound()).to.be.revertedWith("Ownable: caller is not the Coordinator")
-  //     })
-  //     it("should allow the Coordinator to cancel a round", async () => {
-  //         const tally = await minimalQF.tally()
-  //         const contract = await ethers.getContractAt("MinimalQFTally", tally)
-  //         await contract.cancelRound()
-
-  //         expect(await contract.isCancelled()).to.eq(true)
-  //     })
-  // })
-
-  describe("finalize", () => {
-    let mpContract: MessageProcessor;
-
-    let tallyData: ITallyCircuitInputs;
-
-    const maciState = new MaciState(STATE_TREE_DEPTH);
-    let poll: Poll;
-
-    let QVMaciStrategy: QVMACI;
-    let QVMaciStrategyAddress: string;
-
-    let Coordinator: Signer;
-    let allocator: Signer;
-    let recipient1: Signer;
-    let recipient2: Signer;
-    let CoordinatorAddress: string;
-
-    // create a new user keypair
-    const keypair = new Keypair();
-    const coordinatorKeypair = new Keypair();
-    let proofOutputDirectory = "proofs";
-    let DEFAULT_SR_QUEUE_OPS = "100";
-    let DEFAULT_GET_LOG_BATCH_SIZE = 1000;
-    let maciTransactionHash = "0x0";
-    let iface: QVMACIInterface;
-    let ifaceClonableMACI: ClonableMACIInterface;
-    let verifierContract: MockVerifier;
-    let vkRegistryContract: VkRegistry;
-    let maciContract: ClonableMACI;
-    let pollContract: ClonablePoll;
-    let tallyContract: ClonableTally;
-    let AlloContract: Allo;
-
-    let deployTime: number;
-
-    let quiet = true as any;
-
-
-    before(async () => {
-      [Coordinator] = await ethers.getSigners();
-
-      CoordinatorAddress = await Coordinator.getAddress();
-
-      const contracts = await deployTestContracts();
-
-      AlloContract = contracts.Allo;
-      QVMaciStrategy = contracts.QVMACI_STRATEGY;
-      pollContract = contracts.pollContract;
-      tallyContract = contracts.tallyContract;
-      mpContract = contracts.messageProcessorContract;
-      verifierContract = contracts.verifierContract;
-      vkRegistryContract = contracts.vkRegistryContract;
-      maciContract = contracts.maciContract;
-      QVMaciStrategyAddress = await QVMaciStrategy.getAddress();
-      allocator = contracts.user1;
-      recipient1 = contracts.user2;
-      recipient2 = contracts.user3;
-
-      iface = QVMaciStrategy.interface;
-      ifaceClonableMACI = maciContract.interface;
-
-      const deployTime = contracts.poolDeployTime || 0;
-
-      const pollId = maciState.deployPoll(
-        BigInt(deployTime) + 500n,
-        maxValues,
-        {
-          ...treeDepths,
-          intStateTreeDepth: treeDepths.intStateTreeDepth,
-        },
-        messageBatchSize,
-        coordinatorKeypair,
-      );
-
-      poll = maciState.polls.get(pollId)!;
-
-      let _mpContract = mpContract.connect(Coordinator);
-
-      // Add allocator
-      const addAllocatorTx = await QVMaciStrategy.addAllocator(
-        await allocator.getAddress(),
-      );
-      await addAllocatorTx.wait();
-
-      // signup
-      const SignUpTx = await QVMaciStrategy.connect(allocator).signup(
-        keypair.pubKey.asContractParam(),
-      );
-      await SignUpTx.wait();
-
-      // Register recipient
-      let recipientAddress = await recipient1.getAddress();
-      let data = AbiCoder.defaultAbiCoder().encode(
-        ["address", "address", "(uint256,string)"],
-        [recipientAddress, ZeroAddress, [1n, "Project 1"]],
-      );
-      const RecipientRegistrationTx = await AlloContract.connect(
-        recipient1,
-      ).registerRecipient(1n, data);
-      await RecipientRegistrationTx.wait();
-
-      // Review Acccept recipient
-      let status = 2; // Accepted
-      const ReviewRecipientTx = await QVMaciStrategy.connect(
-        Coordinator,
-      ).reviewRecipients([recipientAddress], [status]);
-      await ReviewRecipientTx.wait();
-
-      // create 1 message for the recipient
-      const votingOption =
-        await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
-          recipientAddress,
-        );
-      const command = new PCommand(
-        1n,
-        keypair.pubKey,
-        votingOption,
-        9n,
-        1n,
-        0n,
-        0n,
-      );
-      const signature = command.sign(keypair.privKey);
-      const sharedKey = Keypair.genEcdhSharedKey(
-        keypair.privKey,
-        coordinatorKeypair.pubKey,
-      );
-      const message = command.encrypt(signature, sharedKey);
-      const messageContractParam = message.asContractParam();
-
-      // update the poll state
-      poll.updatePoll(BigInt(maciState.stateLeaves.length));
-
-      // merge the trees
-      const _pollContract = pollContract.connect(Coordinator);
-
-      // publish message on chain and locally
-      const nothing = new Message(1n, [
-        8370432830353022751713833565135785980866757267633941821328460903436894336785n,
-        0n,
-        0n,
-        0n,
-        0n,
-        0n,
-        0n,
-        0n,
-        0n,
-        0n,
-      ]);
-
-      const encP = new PubKey([
-        10457101036533406547632367118273992217979173478358440826365724437999023779287n,
-        19824078218392094440610104313265183977899662750282163392862422243483260492317n,
-      ]);
-      poll.publishMessage(nothing, encP);
-
-      poll.publishMessage(message, keypair.pubKey);
-
-      await _pollContract.publishMessage(
-        messageContractParam,
-        keypair.pubKey.asContractParam(),
-      );
-
-      await timeTravel(Coordinator.provider as unknown as EthereumProvider, 600);
-
-      await _pollContract.mergeMaciStateAqSubRoots(0n, 0n);
-      await _pollContract.mergeMaciStateAq(0n);
-
-      await _pollContract.mergeMessageAqSubRoots(0n);
-      await _pollContract.mergeMessageAq();
-
-      const processMessagesInputs = poll.processMessages(pollId);
-
-      await _mpContract.processMessages(
-        processMessagesInputs.newSbCommitment,
-        [0, 0, 0, 0, 0, 0, 0, 0],
-      );
-
-      const maciAddress = await maciContract.getAddress();
-      await mergeMaciSubtrees({
-        maciAddress,
-        pollId,
-        numQueueOps: DEFAULT_SR_QUEUE_OPS,
-        signer: Coordinator,
-      });
-
-      const random = Math.floor(Math.random() * 10 ** 8);
-      const outputDir = path.join(proofOutputDirectory, `${random}`);
-      if (!existsSync(outputDir)) {
-        mkdirSync(outputDir, { recursive: true });
-      }
-
-      // past an end block that's later than the MACI start block
-      const genProofArgs = getGenProofArgs({
-        maciAddress,
-        pollId,
-        coordinatorMacisk: coordinatorKeypair.privKey.serialize(),
-        rapidsnark,
-        circuitType: circuit,
-        circuitDirectory,
-        outputDir,
-        blocksPerBatch: DEFAULT_GET_LOG_BATCH_SIZE,
-        maciTxHash: maciTransactionHash,
-        signer: Coordinator,
-        quiet,
-      });
-
-      await genProofs(genProofArgs);
-
-      const tallyAddress = await tallyContract.getAddress();
-      const messageProcessorAddress = await mpContract.getAddress();
-
-      // Submit proofs to MACI contract
-      await proveOnChain({
-        pollId,
-        proofDir: genProofArgs?.outputDir || "",
-        subsidyEnabled: false,
-        maciAddress,
-        messageProcessorAddress,
-        tallyAddress,
-        signer: Coordinator,
-        quiet,
-        // true
-      });
-
-      console.log("finished proveOnChain");
-
-      const tally = JSONFile.read(genProofArgs?.tallyFile) as any;
-      const tallyHash = await getIpfsHash(tally);
-      await QVMaciStrategy.connect(Coordinator).publishTallyHash(tallyHash);
-      console.log("Tally hash", tallyHash);
-
-      // add tally results to funding round
-      const recipientTreeDepth = treeDepths.voteOptionTreeDepth;
-      console.log("Adding tally result on chain in batches of", tallyBatchSize);
-      await addTallyResultsBatch(
-        QVMaciStrategy.connect(Coordinator) as QVMACI,
-        recipientTreeDepth,
-        tally,
-        tallyBatchSize,
-      );
-      console.log("Finished adding tally results");
-    });
-
-    // it("should throw when not called by the MinimalQF contract", async () => {
-    //     const tally = await minimalQF.tally()
-    //     const contract = await ethers.getContractAt("MinimalQFTally", tally, user)
-    //     await expect(contract.finalize(5, 5, 5, 5)).to.be.revertedWithCustomError(contract, "OnlyMinimalQF")
-    // })
-
-    // it("should throw when the round is cancelled", async () => {
-    //     const tally = await minimalQF.tally()
-    //     const contract = await ethers.getContractAt("MinimalQFTally", tally, user)
-    //     await expect(minimalQF.transferMatchingFunds(5, 5, 5, 5)).to.be.revertedWithCustomError(
-    //         contract,
-    //         "RoundCancelled",
-    //     )
-    // })
-
-    // it("should throw when the ballots have not been tallied yet", async () => {
-    //     const tally = await newMinimalQf.tally()
-    //     const contract = await ethers.getContractAt("MinimalQFTally", tally, user)
-    //     expect(await contract.isTallied()).to.eq(false)
-
-    //     await expect(newMinimalQf.transferMatchingFunds(5, 5, 5, 5)).to.be.revertedWithCustomError(
-    //         contract,
-    //         "BallotsNotTallied",
-    //     )
-    // })
-
-    // it("should throw when the spent voice credit proof is wrong", async () => {
-    //     // tally the ballots
-
-    //     const tally = await newMinimalQf.tally()
-    //     const contract = await ethers.getContractAt("MinimalQFTally", tally, Coordinator)
-
-    //     tallyData = poll.tallyVotes()
-    //     await contract.tallyVotes(tallyData.newTallyCommitment, [0, 0, 0, 0, 0, 0, 0, 0])
-
-    //     expect(await contract.isTallied()).to.eq(true)
-
-    //     await expect(newMinimalQf.transferMatchingFunds(5, 5, 5, 5)).to.be.revertedWithCustomError(
-    //         contract,
-    //         "InvalidSpentVoiceCreditsProof",
-    //     )
-    // })
-
-    it("should allow the Pool Manager to finalize the round", async () => {
-      tallyData = poll.tallyVotes();
-
-      const tally = tallyContract.connect(Coordinator);
-
-      await tally.tallyVotes(
-        tallyData.newTallyCommitment,
-        [0, 0, 0, 0, 0, 0, 0, 0],
-      );
-
-      expect(await tally.isTallied()).to.eq(true);
-
-      // compute newResultsCommitment
-      const newResultsCommitment = genTreeCommitment(
-        poll.tallyResult.map((x) => BigInt(x)),
-        BigInt(tallyData.newResultsRootSalt),
-        treeDepths.voteOptionTreeDepth,
-      );
-
-      const newPerVOSpentVoiceCreditsCommitment = genTreeCommitment(
-        poll.perVOSpentVoiceCredits.map((x) => BigInt(x)),
-        BigInt(tallyData.newPerVOSpentVoiceCreditsRootSalt!),
-        treeDepths.voteOptionTreeDepth,
-      );
-
-      await QVMaciStrategy.finalize(
-        poll.totalSpentVoiceCredits,
-        tallyData.newSpentVoiceCreditSubtotalSalt,
-        newResultsCommitment,
-        newPerVOSpentVoiceCreditsCommitment,
-      );
-    });
-
-    // it("should not allow to finalize twice", async () => {
-    //     const tally = await newMinimalQf.tally()
-    //     const contract = await ethers.getContractAt("MinimalQFTally", tally, user)
-    //     await expect(newMinimalQf.transferMatchingFunds(5, 5, 5, 5)).to.be.revertedWithCustomError(
-    //         contract,
-    //         "AlreadyFinalized",
-    //     )
-    // })
+  it("Recipient should have more than 0 votes received", async () => {
+    let recipientAddress = await recipient1.getAddress();
+    let recipient = await QVMaciStrategy.recipients(recipientAddress);
+    // expect(recipient.totalVotesReceived).to.be.gt(0);
   });
 });

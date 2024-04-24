@@ -1,0 +1,29 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "Transfer",
+  "sourceName": "contracts/core/libraries/Transfer.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "AMOUNT_MISMATCH",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NATIVE",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080604052348015600f57600080fd5b5060998061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063a0cf0aea14602d575b600080fd5b604773eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee81565b6040516001600160a01b03909116815260200160405180910390f3fea2646970667358221220913b5abaa8e4c66f5e5a6fc818997eef06184441fa4ad66f795f234589c8310d64736f6c63430008130033",
+  "deployedBytecode": "0x6080604052348015600f57600080fd5b506004361060285760003560e01c8063a0cf0aea14602d575b600080fd5b604773eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee81565b6040516001600160a01b03909116815260200160405180910390f3fea2646970667358221220913b5abaa8e4c66f5e5a6fc818997eef06184441fa4ad66f795f234589c8310d64736f6c63430008130033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

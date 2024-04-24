@@ -275,9 +275,9 @@ export async function addTallyResultsBatch(
         spentVoiceCreditsHash,
         BigInt(perVOSpentVoiceCreditsHash),
       ] as any;
-      // @ts-ignore
       encodedData.push(
-        (await QVMACI._addTallyResult.populateTransaction(data)).data,
+        // @ts-ignore
+        (await QVMACI._addTallyResult.populateTransaction(data)).data
       );
     }
 

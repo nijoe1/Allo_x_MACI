@@ -18,3 +18,6 @@ package-lock.json
 # solidity-coverage files
 /coverage
 /coverage.json
+
+# ZKEYS files
+/zkeys

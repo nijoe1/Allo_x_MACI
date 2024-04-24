@@ -1,0 +1,392 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "Contrants",
+  "sourceName": "contracts/strategies/qv-maci/interfaces/Contrants.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "EmptyTallyHash",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "total",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "actual",
+          "type": "uint256"
+        }
+      ],
+      "name": "IncompleteTallyResults",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "IncorrectPerVOSpentVoiceCredits",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "IncorrectSpentVoiceCredits",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "IncorrectTallyResult",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "MaciNotSet",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NoVotes",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotCoordinator",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "OnlyMaciCanRegisterVoters",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "RoundAlreadyFinalized",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TallyHashNotPublished",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UserNotVerified",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "VoteResultsAlreadyVerified",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "VotesNotTallied",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "recipientId",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "votes",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "allocator",
+          "type": "address"
+        }
+      ],
+      "name": "Allocated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "allocator",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "AllocatorAdded",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "allocator",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "AllocatorRemoved",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "maci",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "poll",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "messageProcessor",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "tally",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "subsidy",
+          "type": "address"
+        }
+      ],
+      "name": "MaciSet",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "recipientId",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "applicationId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "enum IStrategy.Status",
+          "name": "status",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "RecipientStatusUpdated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "recipientId",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "recipientIndex",
+          "type": "uint256"
+        }
+      ],
+      "name": "RecipientVotingOptionAdded",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "recipientId",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "applicationId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "enum IStrategy.Status",
+          "name": "status",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "Reviewed",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "tallyHash",
+          "type": "string"
+        }
+      ],
+      "name": "TallyPublished",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "voteOptionIndex",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "tally",
+          "type": "uint256"
+        }
+      ],
+      "name": "TallyResultsAdded",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "registrationStartTime",
+          "type": "uint64"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "registrationEndTime",
+          "type": "uint64"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "allocationStartTime",
+          "type": "uint64"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "allocationEndTime",
+          "type": "uint64"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "TimestampsUpdated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "recipientId",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "applicationId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes",
+          "name": "data",
+          "type": "bytes"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "enum IStrategy.Status",
+          "name": "status",
+          "type": "uint8"
+        }
+      ],
+      "name": "UpdatedRegistration",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "TREE_ARITY",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080604052348015600f57600080fd5b50607c8061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c80634b34e02114602d575b600080fd5b6034600581565b60405190815260200160405180910390f3fea2646970667358221220f032e578527ba7afce126ecaa50c93d2e134dc596cdc1b7ac5f8804e52c2d31f64736f6c63430008130033",
+  "deployedBytecode": "0x6080604052348015600f57600080fd5b506004361060285760003560e01c80634b34e02114602d575b600080fd5b6034600581565b60405190815260200160405180910390f3fea2646970667358221220f032e578527ba7afce126ecaa50c93d2e134dc596cdc1b7ac5f8804e52c2d31f64736f6c63430008130033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

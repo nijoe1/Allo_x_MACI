@@ -218,12 +218,13 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
             revert ALLOCATION_NOT_ENDED();
         }
 
-        // if (!tally.isTallied()) {
-        //     revert VotesNotTallied();
-        // }
-        // if (bytes(tallyHash).length == 0) {
-        //     revert TallyHashNotPublished();
-        // }
+        if (!tally.isTallied()) {
+            revert VotesNotTallied();
+        }
+        if (bytes(tallyHash).length == 0) {
+            revert TallyHashNotPublished();
+        }
+
 
         // make sure we have received all the tally results
         (, , , uint8 voteOptionTreeDepth) = poll.treeDepths();
