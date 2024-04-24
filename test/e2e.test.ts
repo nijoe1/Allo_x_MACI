@@ -175,11 +175,11 @@ describe("e2e", function test() {
   let QVMaciStrategyAddress: string;
   let token: ERC20;
 
-  let owner: Signer;
+  let Coordinator: Signer;
   let allocator: Signer;
   let recipient1: Signer;
   let recipient2: Signer;
-  let ownerAddress: string;
+  let CoordinatorAddress: string;
 
   // create a new user keypair
   const keypair = new Keypair();
@@ -198,9 +198,9 @@ describe("e2e", function test() {
   const signupAmount = 100_000_000_000_000n;
 
   before(async () => {
-    [owner] = await ethers.getSigners();
+    [Coordinator] = await ethers.getSigners();
 
-    ownerAddress = await owner.getAddress();
+    CoordinatorAddress = await Coordinator.getAddress();
 
     const contracts = await deployTestContracts();
 
@@ -249,7 +249,7 @@ describe("e2e", function test() {
         };
       };
 
-      expect(event.args.sender).to.eq(ownerAddress);
+      expect(event.args.sender).to.eq(CoordinatorAddress);
       expect(event.args.allocator).to.eq(await allocator.getAddress());
     });
   });
@@ -320,7 +320,7 @@ describe("e2e", function test() {
       let recipientAddress = await recipient1.getAddress();
       let status = 2; // Accepted
 
-      const tx = await QVMaciStrategy.connect(owner).reviewRecipients(
+      const tx = await QVMaciStrategy.connect(Coordinator).reviewRecipients(
         [recipientAddress],
         [status],
       );
@@ -333,7 +333,7 @@ describe("e2e", function test() {
       expect(receipt?.status).to.eq(1);
 
       const votingOption =
-        await QVMaciStrategy.connect(owner).recipientIdToIndex(
+        await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
           recipientAddress,
         );
 
@@ -361,7 +361,7 @@ describe("e2e", function test() {
       let recipientAddress = await recipient1.getAddress();
 
       const votingOption =
-        await QVMaciStrategy.connect(owner).recipientIdToIndex(
+        await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
           recipientAddress,
         );
 
@@ -392,7 +392,7 @@ describe("e2e", function test() {
       let recipientAddress = await recipient1.getAddress();
 
       const votingOption =
-        await QVMaciStrategy.connect(owner).recipientIdToIndex(
+        await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
           recipientAddress,
         );
 
@@ -423,15 +423,15 @@ describe("e2e", function test() {
   });
 
   // describe("recipientRegistry", () => {
-  //     it("should allow the owner to add a recipient", async () => {
-  //         await recipientRegistry.addRecipient(0n, ownerAddress)
+  //     it("should allow the Coordinator to add a recipient", async () => {
+  //         await recipientRegistry.addRecipient(0n, CoordinatorAddress)
   //     })
-  //     it("should allow the owner to add multiple recipients", async () => {
-  //         await recipientRegistry.addRecipients([ownerAddress, ownerAddress, ownerAddress])
+  //     it("should allow the Coordinator to add multiple recipients", async () => {
+  //         await recipientRegistry.addRecipients([CoordinatorAddress, CoordinatorAddress, CoordinatorAddress])
   //     })
-  //     it("should throw if the caller is not the owner", async () => {
-  //         await expect(recipientRegistry.connect(user).addRecipient(0n, ownerAddress)).to.be.revertedWith(
-  //             "Ownable: caller is not the owner",
+  //     it("should throw if the caller is not the Coordinator", async () => {
+  //         await expect(recipientRegistry.connect(user).addRecipient(0n, CoordinatorAddress)).to.be.revertedWith(
+  //             "Ownable: caller is not the Coordinator",
   //         )
   //     })
   // })
@@ -443,19 +443,19 @@ describe("e2e", function test() {
   //     })
 
   //     it("should return the correct amount of matching funds (amount in the contract + approved tokens by funding source)", async () => {
-  //         await token.connect(owner).approve(minimalQFAddress, signupAmount)
+  //         await token.connect(Coordinator).approve(minimalQFAddress, signupAmount)
   //         const funds = await minimalQF.getMatchingFunds()
   //         expect(funds).to.eq(signupAmount * 2n)
   //     })
   // })
 
   // describe("cancelRound", () => {
-  //     it("should prevent a non owner from cancelling a round", async () => {
+  //     it("should prevent a non Coordinator from cancelling a round", async () => {
   //         const tally = await minimalQF.tally()
   //         const contract = await ethers.getContractAt("MinimalQFTally", tally)
-  //         await expect(contract.connect(user).cancelRound()).to.be.revertedWith("Ownable: caller is not the owner")
+  //         await expect(contract.connect(user).cancelRound()).to.be.revertedWith("Ownable: caller is not the Coordinator")
   //     })
-  //     it("should allow the owner to cancel a round", async () => {
+  //     it("should allow the Coordinator to cancel a round", async () => {
   //         const tally = await minimalQF.tally()
   //         const contract = await ethers.getContractAt("MinimalQFTally", tally)
   //         await contract.cancelRound()
@@ -475,11 +475,11 @@ describe("e2e", function test() {
     let QVMaciStrategy: QVMACI;
     let QVMaciStrategyAddress: string;
 
-    let owner: Signer;
+    let Coordinator: Signer;
     let allocator: Signer;
     let recipient1: Signer;
     let recipient2: Signer;
-    let ownerAddress: string;
+    let CoordinatorAddress: string;
 
     // create a new user keypair
     const keypair = new Keypair();
@@ -499,10 +499,13 @@ describe("e2e", function test() {
 
     let deployTime: number;
 
-    before(async () => {
-      [owner] = await ethers.getSigners();
+    let quiet = true as any;
 
-      ownerAddress = await owner.getAddress();
+
+    before(async () => {
+      [Coordinator] = await ethers.getSigners();
+
+      CoordinatorAddress = await Coordinator.getAddress();
 
       const contracts = await deployTestContracts();
 
@@ -537,7 +540,7 @@ describe("e2e", function test() {
 
       poll = maciState.polls.get(pollId)!;
 
-      let _mpContract = mpContract.connect(owner);
+      let _mpContract = mpContract.connect(Coordinator);
 
       // Add allocator
       const addAllocatorTx = await QVMaciStrategy.addAllocator(
@@ -565,13 +568,13 @@ describe("e2e", function test() {
       // Review Acccept recipient
       let status = 2; // Accepted
       const ReviewRecipientTx = await QVMaciStrategy.connect(
-        owner,
+        Coordinator,
       ).reviewRecipients([recipientAddress], [status]);
       await ReviewRecipientTx.wait();
 
       // create 1 message for the recipient
       const votingOption =
-        await QVMaciStrategy.connect(owner).recipientIdToIndex(
+        await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
           recipientAddress,
         );
       const command = new PCommand(
@@ -595,7 +598,7 @@ describe("e2e", function test() {
       poll.updatePoll(BigInt(maciState.stateLeaves.length));
 
       // merge the trees
-      const _pollContract = pollContract.connect(owner);
+      const _pollContract = pollContract.connect(Coordinator);
 
       // publish message on chain and locally
       const nothing = new Message(1n, [
@@ -624,7 +627,7 @@ describe("e2e", function test() {
         keypair.pubKey.asContractParam(),
       );
 
-      await timeTravel(owner.provider as unknown as EthereumProvider, 600);
+      await timeTravel(Coordinator.provider as unknown as EthereumProvider, 600);
 
       await _pollContract.mergeMaciStateAqSubRoots(0n, 0n);
       await _pollContract.mergeMaciStateAq(0n);
@@ -644,7 +647,7 @@ describe("e2e", function test() {
         maciAddress,
         pollId,
         numQueueOps: DEFAULT_SR_QUEUE_OPS,
-        signer: owner,
+        signer: Coordinator,
       });
 
       const random = Math.floor(Math.random() * 10 ** 8);
@@ -664,7 +667,7 @@ describe("e2e", function test() {
         outputDir,
         blocksPerBatch: DEFAULT_GET_LOG_BATCH_SIZE,
         maciTxHash: maciTransactionHash,
-        signer: owner,
+        signer: Coordinator,
         quiet,
       });
 
@@ -672,8 +675,6 @@ describe("e2e", function test() {
 
       const tallyAddress = await tallyContract.getAddress();
       const messageProcessorAddress = await mpContract.getAddress();
-
-      let quiet = true as any;
 
       // Submit proofs to MACI contract
       await proveOnChain({
@@ -683,7 +684,7 @@ describe("e2e", function test() {
         maciAddress,
         messageProcessorAddress,
         tallyAddress,
-        signer: owner,
+        signer: Coordinator,
         quiet,
         // true
       });
@@ -692,14 +693,14 @@ describe("e2e", function test() {
 
       const tally = JSONFile.read(genProofArgs?.tallyFile) as any;
       const tallyHash = await getIpfsHash(tally);
-      await QVMaciStrategy.connect(owner).publishTallyHash(tallyHash);
+      await QVMaciStrategy.connect(Coordinator).publishTallyHash(tallyHash);
       console.log("Tally hash", tallyHash);
 
       // add tally results to funding round
       const recipientTreeDepth = treeDepths.voteOptionTreeDepth;
       console.log("Adding tally result on chain in batches of", tallyBatchSize);
       await addTallyResultsBatch(
-        QVMaciStrategy.connect(owner) as QVMACI,
+        QVMaciStrategy.connect(Coordinator) as QVMACI,
         recipientTreeDepth,
         tally,
         tallyBatchSize,
@@ -737,7 +738,7 @@ describe("e2e", function test() {
     //     // tally the ballots
 
     //     const tally = await newMinimalQf.tally()
-    //     const contract = await ethers.getContractAt("MinimalQFTally", tally, owner)
+    //     const contract = await ethers.getContractAt("MinimalQFTally", tally, Coordinator)
 
     //     tallyData = poll.tallyVotes()
     //     await contract.tallyVotes(tallyData.newTallyCommitment, [0, 0, 0, 0, 0, 0, 0, 0])
@@ -753,7 +754,7 @@ describe("e2e", function test() {
     it("should allow the Pool Manager to finalize the round", async () => {
       tallyData = poll.tallyVotes();
 
-      const tally = tallyContract.connect(owner);
+      const tally = tallyContract.connect(Coordinator);
 
       await tally.tallyVotes(
         tallyData.newTallyCommitment,
