@@ -18,7 +18,9 @@ import { AccQueue } from "maci-contracts/contracts/trees/AccQueue.sol";
 /// which can be either votes, key change messages or topup messages.
 /// @dev Do not deploy this directly. Use PollFactory.deploy() which performs some
 /// checks on the Poll constructor arguments.
-contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, EmptyBallotRoots, IPoll {
+contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPoll {
+    uint256[5] public emptyBallotRoots;
+  
     using SafeERC20 for ERC20;
 
     /// @notice Whether the Poll has been initialized
@@ -99,6 +101,12 @@ contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, Emp
     ) public initializer {
         __Context_init_unchained();
         __Ownable_init_unchained();
+        
+        emptyBallotRoots[0] = uint256(4904028317433377177773123885584230878115556059208431880161186712332781831975);
+        emptyBallotRoots[1] = uint256(344732312350052944041104345325295111408747975338908491763817872057138864163);
+        emptyBallotRoots[2] = uint256(19445814455012978799483892811950396383084183210860279923207176682490489907069);
+        emptyBallotRoots[3] = uint256(10621810780690303482827422143389858049829670222244900617652404672125492013328);
+        emptyBallotRoots[4] = uint256(17077690379337026179438044602068085690662043464643511544329656140997390498741);
         // check that the coordinator public key is valid
         if (_coordinatorPubKey.x >= SNARK_SCALAR_FIELD || _coordinatorPubKey.y >= SNARK_SCALAR_FIELD) {
             revert MaciPubKeyLargerThanSnarkFieldSize();

@@ -24,7 +24,11 @@ import {
   VkRegistry,
 } from "maci-contracts";
 
-import { addTallyResultsBatch, createMessage } from "./utils/maci";
+import {
+  addTallyResult,
+  addTallyResultsBatch,
+  createMessage,
+} from "./utils/maci";
 
 import { DEFAULT_CIRCUIT, getCircuitFiles } from "./utils/circuits";
 
@@ -136,6 +140,8 @@ describe("e2e", function test() {
   let deployTime: number;
   let quiet = true as any;
 
+  const random = Math.floor(Math.random() * 10 ** 8);
+
   before(async () => {
     [Coordinator] = await ethers.getSigners();
 
@@ -174,28 +180,40 @@ describe("e2e", function test() {
     );
     await SignUpTx.wait();
 
-    // Register recipient
-    let recipientAddress = await recipient1.getAddress();
+    // Register recipients
+    let recipientAddress1 = await recipient1.getAddress();
     let data = AbiCoder.defaultAbiCoder().encode(
       ["address", "address", "(uint256,string)"],
-      [recipientAddress, ZeroAddress, [1n, "Project 1"]]
+      [recipientAddress1, ZeroAddress, [1n, "Project 1"]]
     );
+
     const RecipientRegistrationTx = await AlloContract.connect(
       recipient1
     ).registerRecipient(1n, data);
     await RecipientRegistrationTx.wait();
 
+    let recipientAddress2 = await recipient2.getAddress();
+    data = AbiCoder.defaultAbiCoder().encode(
+      ["address", "address", "(uint256,string)"],
+      [recipientAddress2, ZeroAddress, [1n, "Project 2"]]
+    );
+
+    const RecipientRegistrationTx2 = await AlloContract.connect(
+      recipient2
+    ).registerRecipient(1n, data);
+    await RecipientRegistrationTx2.wait();
+
     // Review Acccept recipient
     let status = 2; // Accepted
     const ReviewRecipientTx = await QVMaciStrategy.connect(
       Coordinator
-    ).reviewRecipients([recipientAddress], [status]);
+    ).reviewRecipients([recipientAddress1, recipientAddress2], [status, status]);
     await ReviewRecipientTx.wait();
 
-    // create 1 message for the recipient
-    const votingOption =
+    // create 1 vote message for the recipient1
+    const votingOption1 =
       await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
-        recipientAddress
+        recipientAddress1
       );
 
     const maciAddress = await maciContract.getAddress();
@@ -203,15 +221,34 @@ describe("e2e", function test() {
     await publish({
       pubkey: keypair.pubKey.serialize(),
       stateIndex: 1n,
-      voteOptionIndex: votingOption,
+      voteOptionIndex: votingOption1,
       nonce: 1n,
       pollId: 0n,
-      newVoteWeight: 9n,
+      newVoteWeight: 10n,
       maciContractAddress: maciAddress,
       salt: genRandomSalt(),
       privateKey: keypair.privKey.serialize(),
       signer: allocator,
     } as PublishArgs);
+
+    // create 1 vote message for the recipient1
+    // const votingOption2 =
+    //   await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
+    //     recipientAddress2
+    //   );
+
+    // await publish({
+    //   pubkey: keypair.pubKey.serialize(),
+    //   stateIndex: 1n,
+    //   voteOptionIndex: votingOption2,
+    //   nonce: 2n,
+    //   pollId: 0n,
+    //   newVoteWeight: 30n,
+    //   maciContractAddress: maciAddress,
+    //   salt: genRandomSalt(),
+    //   privateKey: keypair.privKey.serialize(),
+    //   signer: allocator,
+    // } as PublishArgs);
 
     await timeTravel(Coordinator.provider as unknown as EthereumProvider, 700);
 
@@ -222,8 +259,6 @@ describe("e2e", function test() {
       signer: Coordinator,
       quiet: false,
     });
-
-    const random = Math.floor(Math.random() * 10 ** 8);
 
     const outputDir = path.join(proofOutputDirectory, `${random}`);
     if (!existsSync(outputDir)) {
@@ -287,21 +322,53 @@ describe("e2e", function test() {
     const tally = JSONFile.read(tallyFile) as any;
     const tallyHash = await getIpfsHash(tally);
 
-    await QVMaciStrategy.connect(Coordinator).publishTallyHash(tallyHash);
+    let publishTallyHashReceipt =
+      await QVMaciStrategy.connect(Coordinator).publishTallyHash(tallyHash);
+
+    await publishTallyHashReceipt.wait();
+
     console.log("Tally hash", tallyHash);
 
     // add tally results to funding round
     const recipientTreeDepth = voteOptionTreeDepth;
 
-    console.log("Adding tally result on chain in batches of", tallyBatchSize)
+    console.log("Adding tally result on chain in batches of", tallyBatchSize);
 
-    await addTallyResultsBatch(
+    await addTallyResult(
       QVMaciStrategy.connect(Coordinator) as QVMACI,
       recipientTreeDepth,
       tally,
-      tallyBatchSize
+      Number(votingOption1)
     );
+
+    // await addTallyResult(
+    //   QVMaciStrategy.connect(Coordinator) as QVMACI,
+    //   recipientTreeDepth,
+    //   tally,
+    //   Number(votingOption2)
+    // );
+
     console.log("Finished adding tally results");
+  });
+
+  it("Recipient should have more than 0 votes received", async () => {
+    let recipientAddress = await recipient1.getAddress();
+    let recipient = await QVMaciStrategy.recipients(recipientAddress);
+    console.log("Recipient", recipient);
+
+    expect(recipient.totalVotesReceived).to.be.eq(
+      Math.floor(Math.sqrt(10 * 10 ** 18))
+    );
+  });
+
+  it("Should Finalize the Round", async () => {
+    const outputDir = path.join(proofOutputDirectory, `${random}`);
+
+    const tallyFile = getTalyFilePath(outputDir);
+
+    const tally = JSONFile.read(tallyFile) as any;
+
+    const recipientTreeDepth = voteOptionTreeDepth;
 
     const newResultCommitment = genTallyResultCommitment(
       tally.results.tally.map((x: string) => BigInt(x)),
@@ -315,18 +382,56 @@ describe("e2e", function test() {
       recipientTreeDepth
     );
 
+
+    console.log(
+      "Tally total spent voice credits",
+      tally.totalSpentVoiceCredits.spent
+    );
+
     // Finalize round
-    await QVMaciStrategy.finalize(
+    let finalize = await QVMaciStrategy.connect(Coordinator).finalize(
       tally.totalSpentVoiceCredits.spent,
       tally.totalSpentVoiceCredits.salt,
       newResultCommitment.toString(),
       perVOSpentVoiceCreditsCommitment.toString()
     );
+
+    let receipt = await finalize.wait();
+
+    let isFinalized = await QVMaciStrategy.isFinalized();
+    expect(isFinalized).to.be.true;
   });
 
-  it("Recipient should have more than 0 votes received", async () => {
-    let recipientAddress = await recipient1.getAddress();
-    let recipient = await QVMaciStrategy.recipients(recipientAddress);
-    expect(recipient.totalVotesReceived).to.be.gt(0);
+  it("Should Distribute Founds", async () => {
+    const recipient1Balance = await ethers.provider.getBalance(
+      await recipient1.getAddress()
+    );
+    // const recipient2Balance = await ethers.provider.getBalance(
+    //   await recipient2.getAddress()
+    // );
+    const recipientIDs = [
+      await recipient1.getAddress(),
+      // await recipient2.getAddress(),
+    ];
+    let distributeFunds = await AlloContract.connect(Coordinator).distribute(
+      1,
+      recipientIDs,
+      "0x00"
+    );
+    let receipt = await distributeFunds.wait();
+
+    const recipient1BalanceAfterDistribution = await ethers.provider.getBalance(
+      await recipient1.getAddress()
+    );
+    const recipient2BalanceAfterDistribution = await ethers.provider.getBalance(
+      await recipient2.getAddress()
+    );
+
+    console.log("Recipient 1 balance before Distribution: ",recipient1Balance, " & After : ",  recipient1BalanceAfterDistribution);
+    // console.log("Recipient 2 balance before Distribution: ",recipient2Balance, " & After : ",  recipient2BalanceAfterDistribution);
+
+    expect(recipient1BalanceAfterDistribution).to.be.greaterThan(recipient1Balance);
+    // expect(recipient2BalanceAfterDistribution).to.be.greaterThan(recipient2Balance);
+
   });
 });

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.19;
+pragma solidity ^0.8.20;
 
 // External Libraries
 import { Constants, Metadata, IRegistry, IAllo } from "./interfaces/Constants.sol";
@@ -70,6 +70,11 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
     IRegistry private _registry;
 
     Counters.Counter private _recipientCounter;
+
+    /// @notice The status of pool true after Coordinator has finalized the pool
+    // By submitting the final tally ZK proof verified by the Tally contract
+    bool public isFinalized;
+
 
     // slots [4...n]
     /// @notice The status of the recipient for this strategy only
@@ -468,6 +473,11 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
         bytes memory,
         address _sender
     ) internal override onlyPoolManager(_sender) onlyAfterAllocation {
+
+        if(!isFinalized) {
+            revert INVALID();
+        }
+
         uint256 payoutLength = _recipientIds.length;
 
         uint256[] memory payouts = new uint256[](payoutLength);

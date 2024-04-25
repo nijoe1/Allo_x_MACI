@@ -220,26 +220,26 @@ export async function addTallyResultsBatch(
   tallyData: any,
   batchSize: number,
   startIndex = 0,
-  callback?: (processed: number, receipt: ContractTransactionReceipt) => void,
+  callback?: (processed: number, receipt: ContractTransactionReceipt) => void
 ): Promise<number> {
   let totalGasUsed = 0;
   const { tally } = tallyData.results;
 
   const spentVoiceCreditsHash = hashLeftRight(
     BigInt(tallyData.totalSpentVoiceCredits.spent),
-    BigInt(tallyData.totalSpentVoiceCredits.salt),
+    BigInt(tallyData.totalSpentVoiceCredits.salt)
   );
 
   const perVOSpentVoiceCreditsHash = genTallyResultCommitment(
     tallyData.perVOSpentVoiceCredits.tally.map((x: string) => BigInt(x)),
     BigInt(tallyData.perVOSpentVoiceCredits.salt),
-    recipientTreeDepth,
+    recipientTreeDepth
   );
 
   const newResultCommitment = genTallyResultCommitment(
     tally.map((x: string) => BigInt(x)),
     BigInt(tallyData.results.salt),
-    recipientTreeDepth,
+    recipientTreeDepth
   );
 
   const newTallyCommitment = hash3([
@@ -252,7 +252,7 @@ export async function addTallyResultsBatch(
     console.error(
       "Error: the newTallyCommitment is invalid.",
       "0x" + newTallyCommitment.toString(16),
-      tallyData.newTallyCommitment,
+      tallyData.newTallyCommitment
     );
   }
 
@@ -261,27 +261,17 @@ export async function addTallyResultsBatch(
       i,
       recipientTreeDepth,
       tallyData,
-      batchSize,
+      batchSize
     );
-    let encodedData = [] as any;
-    let proof = proofs[0];
-    for (let i = 0; i < proofs.length; i++) {
-      proof = proofs[i];
-      let data = [
-        proof.recipientIndex,
-        proof.result,
-        proof.proof,
-        BigInt(tallyData.results.salt),
-        spentVoiceCreditsHash,
-        BigInt(perVOSpentVoiceCreditsHash),
-      ] as any;
-      encodedData.push(
-        // @ts-ignore
-        (await QVMACI._addTallyResult.populateTransaction(data)).data
-      );
-    }
 
-    const tx = await QVMACI.multicall(encodedData);
+    const tx = await QVMACI.addTallyResultsBatch(
+      proofs.map((i) => i.recipientIndex),
+      proofs.map((i) => i.result),
+      proofs.map((i) => i.proof),
+      BigInt(tallyData.results.salt),
+      spentVoiceCreditsHash,
+      BigInt(perVOSpentVoiceCreditsHash)
+    );
     const receipt = await tx.wait();
     if (receipt?.status !== 1) {
       throw new Error("Failed to add tally results on chain");
@@ -296,6 +286,60 @@ export async function addTallyResultsBatch(
     totalGasUsed = totalGasUsed + Number(receipt.gasUsed);
   }
   return totalGasUsed;
+}
+
+export async function addTallyResult(
+  QVMACI: QVMACI,
+  recipientTreeDepth: number,
+  tallyData: any,
+  index: number
+) {
+  let totalGasUsed = 0;
+  const { tally } = tallyData.results;
+
+  const spentVoiceCreditsHash = hashLeftRight(
+    BigInt(tallyData.totalSpentVoiceCredits.spent),
+    BigInt(tallyData.totalSpentVoiceCredits.salt)
+  );
+
+  const perVOSpentVoiceCreditsHash = genTallyResultCommitment(
+    tallyData.perVOSpentVoiceCredits.tally.map((x: string) => BigInt(x)),
+    BigInt(tallyData.perVOSpentVoiceCredits.salt),
+    recipientTreeDepth
+  );
+
+  const newResultCommitment = genTallyResultCommitment(
+    tally.map((x: string) => BigInt(x)),
+    BigInt(tallyData.results.salt),
+    recipientTreeDepth
+  );
+
+  const newTallyCommitment = hash3([
+    newResultCommitment,
+    spentVoiceCreditsHash,
+    perVOSpentVoiceCreditsHash,
+  ]);
+
+  if ("0x" + newTallyCommitment.toString(16) !== tallyData.newTallyCommitment) {
+    console.error(
+      "Error: the newTallyCommitment is invalid.",
+      "0x" + newTallyCommitment.toString(16),
+      tallyData.newTallyCommitment
+    );
+  }
+
+  const proof = getTallyResultProof(index, recipientTreeDepth, tallyData);
+
+  // @ts-ignore
+  let receipt = await QVMACI._addTallyResult(
+    proof.recipientIndex,
+    proof.result,
+    proof.proof,
+    BigInt(tallyData.results.salt),
+    spentVoiceCreditsHash,
+    BigInt(perVOSpentVoiceCreditsHash)
+  );
+  await receipt.wait();
 }
 
 /* Input to getGenProofArgs() */

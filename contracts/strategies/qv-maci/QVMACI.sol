@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 // MACI Contracts & Libraries
 import { ClonableMACIFactory } from "../../ClonableMaciContracts/ClonableMACIFactory.sol";
@@ -42,8 +42,6 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
     address public _maci;
 
     ClonableMACI.PollContracts public _pollContracts;
-
-    bool public isFinalized;
 
     address public coordinator; // coordinator address
 
@@ -202,7 +200,7 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
         uint256 _newResultCommitment,
         uint256 _perVOSpentVoiceCreditsHash
     ) external onlyPoolManager(msg.sender) onlyAfterAllocation {
-        (Poll poll, Tally tally) = getMaciContracts();
+        (, Tally tally) = getMaciContracts();
 
         if (isFinalized) {
             revert RoundAlreadyFinalized();
@@ -210,28 +208,12 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
 
         if (isAddressZero(_maci)) revert MaciNotSet();
 
-        (uint256 deployTime, uint256 duration) = poll.getDeployTimeAndDuration();
-
-        // Require that the voting period is over
-        uint256 secondsPassed = block.timestamp - deployTime;
-        if (secondsPassed <= duration) {
-            revert ALLOCATION_NOT_ENDED();
-        }
-
         if (!tally.isTallied()) {
             revert VotesNotTallied();
         }
         if (bytes(tallyHash).length == 0) {
             revert TallyHashNotPublished();
-        }
-
-
-        // make sure we have received all the tally results
-        (, , , uint8 voteOptionTreeDepth) = poll.treeDepths();
-        uint256 totalResults = uint256(TREE_ARITY) ** uint256(voteOptionTreeDepth);
-        if (totalTallyResults != totalResults) {
-            revert IncompleteTallyResults(totalResults, totalTallyResults);
-        }
+        } 
 
         // If nobody voted, the round should be cancelled to avoid locking of matching funds
         if (_totalSpent == 0) {
@@ -270,7 +252,7 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
         uint256 _tallyResultSalt,
         uint256 _spentVoiceCreditsHash,
         uint256 _perVOSpentVoiceCreditsHash
-    ) external onlyCoordinator {
+    ) public {
         (Poll poll, Tally tally) = getMaciContracts();
 
         (, , , uint8 voteOptionTreeDepth) = poll.treeDepths();
@@ -295,6 +277,40 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
 
         emit TallyResultsAdded(_voteOptionIndex, _tallyResult);
     }
+
+    /**
+        * @dev Add and verify tally results by batch.
+        * @param _voteOptionIndices Vote option index.
+        * @param _tallyResults The results of vote tally for the recipients.
+        * @param _tallyResultProofs Proofs of correctness of the vote tally results.
+        * @param _tallyResultSalt the respective salt in the results object in the tally.json
+        * @param _spentVoiceCreditsHashes hashLeftRight(number of spent voice credits, spent salt)
+        * @param _perVOSpentVoiceCreditsHashes hashLeftRight(merkle root of the no spent voice credits per vote option, perVOSpentVoiceCredits salt)
+    */
+    function addTallyResultsBatch(
+        uint256[] calldata _voteOptionIndices,
+        uint256[] calldata _tallyResults,
+        uint256[][][] calldata _tallyResultProofs,
+        uint256 _tallyResultSalt,
+        uint256 _spentVoiceCreditsHashes,
+        uint256 _perVOSpentVoiceCreditsHashes
+    ) external onlyCoordinator {
+        if (_voteOptionIndices.length != _tallyResults.length) {
+            revert INVALID();
+        }
+
+        for (uint256 i = 0; i < _voteOptionIndices.length; i++) {
+            _addTallyResult(
+                _voteOptionIndices[i],
+                _tallyResults[i],
+                _tallyResultProofs[i],
+                _tallyResultSalt,
+                _spentVoiceCreditsHashes,
+                _perVOSpentVoiceCreditsHashes
+            );
+        }
+    }
+    
 
     /// =========================
     /// ==== View Functions =====

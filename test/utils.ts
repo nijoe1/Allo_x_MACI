@@ -373,13 +373,18 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     QVMaciStrategyAddress,
     bytes,
     "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-    0,
+    BigInt(100*10**18),
     {
       protocol: 1,
       pointer: "test",
     },
     [signer.address]
+    ,{value: BigInt(100*10**18)}
   );
+
+  console.log("owner balance : ", await ethers.provider.getBalance(signer.address));
+
+
   // Get the receipt of the create pool transaction the _strategy and console log it
   // emit PoolCreated(poolId, _profileId, _strategy, _token, _amount, _metadata);
   const createPoolReceipt = await createPool.wait();
