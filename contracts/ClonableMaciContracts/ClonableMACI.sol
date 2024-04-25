@@ -126,8 +126,7 @@ contract ClonableMACI is IMACI, Params, Utilities, Initializable, OwnableUpgrade
         address _signUpGatekeeper,
         address _initialVoiceCreditProxy,
         address _topupCredit,
-        address _coordinator,
-        address _stateAq
+        address _coordinator
     ) public initializer {
         
         __Context_init_unchained();
@@ -145,7 +144,7 @@ contract ClonableMACI is IMACI, Params, Utilities, Initializable, OwnableUpgrade
         vkRegistry = _vkRegistry;
 
         // Set the AccQueue State
-        stateAq = AccQueueQuinaryBlankSl(_stateAq);
+        stateAq = new AccQueueQuinaryBlankSl(STATE_TREE_SUBDEPTH);
         stateAq.enqueue(BLANK_STATE_LEAF_HASH);
 
         coordinator = _coordinator;

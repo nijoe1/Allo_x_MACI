@@ -10,6 +10,8 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { EmptyBallotRoots } from "maci-contracts/contracts/trees/EmptyBallotRoots.sol";
 import { IPoll } from "maci-contracts/contracts/interfaces/IPoll.sol";
 import { Utilities } from "maci-contracts/contracts/utilities/Utilities.sol";
+import { AccQueueQuinaryMaci } from "maci-contracts/contracts/trees/AccQueueQuinaryMaci.sol";
+import { AccQueue } from "maci-contracts/contracts/trees/AccQueue.sol";
 
 /// @title Poll
 /// @notice A Poll contract allows voters to submit encrypted messages
@@ -101,6 +103,11 @@ contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, Emp
         if (_coordinatorPubKey.x >= SNARK_SCALAR_FIELD || _coordinatorPubKey.y >= SNARK_SCALAR_FIELD) {
             revert MaciPubKeyLargerThanSnarkFieldSize();
         }
+
+        /// @notice deploy a new AccQueue contract to store messages
+        AccQueue messageAq = new AccQueueQuinaryMaci(_treeDepths.messageTreeSubDepth);
+
+        _extContracts.messageAq = messageAq;
 
         // store the pub key as object then calculate the hash
         coordinatorPubKey = _coordinatorPubKey;

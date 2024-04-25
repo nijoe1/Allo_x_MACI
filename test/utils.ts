@@ -21,8 +21,6 @@ import {
   Registry,
   QVMACI,
   ClonableMACI,
-  ClonableAccQueueQuinaryBlankSl,
-  ClonableAccQueueQuinaryMaci,
   ClonablePoll,
   ClonableMessageProcessor,
   ClonableTally,
@@ -47,42 +45,6 @@ const PRIVATE_KEY_USER3 = process.env.PRIVATE_KEY_USER3;
 
 export const duration = 20;
 
-export const STATE_TREE_DEPTH = 6;
-export const STATE_TREE_ARITY = 5;
-export const MESSAGE_TREE_DEPTH = 8;
-export const MESSAGE_TREE_SUBDEPTH = 2;
-export const messageBatchSize = STATE_TREE_ARITY ** MESSAGE_TREE_SUBDEPTH;
-
-export const testProcessVk = new VerifyingKey(
-  new G1Point(BigInt(0), BigInt(1)),
-  new G2Point([BigInt(2), BigInt(3)], [BigInt(4), BigInt(5)]),
-  new G2Point([BigInt(6), BigInt(7)], [BigInt(8), BigInt(9)]),
-  new G2Point([BigInt(10), BigInt(11)], [BigInt(12), BigInt(13)]),
-  [new G1Point(BigInt(14), BigInt(15)), new G1Point(BigInt(16), BigInt(17))]
-);
-
-export const testTallyVk = new VerifyingKey(
-  new G1Point(BigInt(0), BigInt(1)),
-  new G2Point([BigInt(2), BigInt(3)], [BigInt(4), BigInt(5)]),
-  new G2Point([BigInt(6), BigInt(7)], [BigInt(8), BigInt(9)]),
-  new G2Point([BigInt(10), BigInt(11)], [BigInt(12), BigInt(13)]),
-  [new G1Point(BigInt(14), BigInt(15)), new G1Point(BigInt(16), BigInt(17))]
-);
-
-export const initialVoiceCreditBalance = 100;
-export const maxValues: MaxValues = {
-  maxMessages: STATE_TREE_ARITY ** MESSAGE_TREE_DEPTH,
-  maxVoteOptions: 125,
-};
-
-export const treeDepths: TreeDepths = {
-  intStateTreeDepth: 1,
-  messageTreeSubDepth: MESSAGE_TREE_SUBDEPTH,
-  messageTreeDepth: MESSAGE_TREE_DEPTH,
-  voteOptionTreeDepth: 3,
-};
-
-export const tallyBatchSize = STATE_TREE_ARITY ** treeDepths.intStateTreeDepth;
 
 export interface ITestContracts {
   Allo: Allo;
@@ -146,6 +108,7 @@ export const deployAlloContracts = async () => {
 };
 
 export const deployTestContracts = async (): Promise<ITestContracts> => {
+
   const deployParams = await MaciParameters.mock2();
 
   console.log(deployParams);
@@ -191,8 +154,6 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     "ClonableMessageProcessor",
     "ClonableTally",
     "ClonableMACI",
-    "ClonableAccQueueQuinaryBlankSl",
-    "ClonableAccQueueQuinaryMaci",
   ];
 
   // Link Poseidon contracts to MACI
@@ -220,8 +181,6 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     ClonableMessageProcessorFactory,
     ClonableTallyFactory,
     ClonableMACIFactory,
-    ClonableAccQueueQuinaryBlankSlFactory,
-    ClonableAccQueueQuinaryMaciFactory,
   ] = await Promise.all(linkedContractFactories);
 
   const pollFactoryContract =
@@ -244,36 +203,6 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
       "",
       true
     );
-
-  const ClonableAccQueueQuinaryBlankSl =
-    await deployContractWithLinkedLibraries<ClonableAccQueueQuinaryBlankSl>(
-      ClonableAccQueueQuinaryBlankSlFactory,
-      "ClonableAccQueueQuinaryBlankSl",
-      true
-    );
-
-  const ClonableAccQueueQuinaryBlankSlAddress =
-    await ClonableAccQueueQuinaryBlankSl.getAddress();
-
-  console.log(
-    "ClonableAccQueueQuinaryBlankSlAddress deployed at : ",
-    ClonableAccQueueQuinaryBlankSlAddress
-  );
-
-  const ClonableAccQueueQuinaryMaci =
-    await deployContractWithLinkedLibraries<ClonableAccQueueQuinaryMaci>(
-      ClonableAccQueueQuinaryMaciFactory,
-      "ClonableAccQueueQuinaryMaci",
-      true
-    );
-
-  const ClonableAccQueueQuinaryMaciAddress =
-    await ClonableAccQueueQuinaryMaci.getAddress();
-
-  console.log(
-    "ClonableAccQueueQuinaryMaciAddress deployed at : ",
-    ClonableAccQueueQuinaryMaciAddress
-  );
 
   const [pollAddr, mpAddr, tallyAddr] = await Promise.all([
     pollFactoryContract.getAddress(),
@@ -311,12 +240,10 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
       verifierContractAddress,
       vkRegistryContractAddress,
       ClonableMACIAddress,
-      ClonableAccQueueQuinaryBlankSlAddress,
-      ClonableAccQueueQuinaryMaciAddress,
       pollAddr,
       tallyAddr,
       mpAddr,
-    ]
+    ],
   );
 
   const ClonableMACIFactoryAddress = await __ClonableMACIFactory.getAddress();

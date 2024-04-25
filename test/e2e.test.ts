@@ -14,17 +14,13 @@ import { existsSync, mkdirSync } from "fs";
 import { Keypair, Message, PCommand, PubKey } from "maci-domainobjs";
 import { ITallyCircuitInputs, MaciState, Poll } from "maci-core";
 import {
-  genTreeCommitment,
   genTreeCommitment as genTallyResultCommitment,
   genRandomSalt,
 } from "maci-crypto";
 import {
-  ERC20,
   MessageProcessor,
-  MessageProcessor__factory,
   MockVerifier,
   Verifier,
-  Poll__factory,
   VkRegistry,
 } from "maci-contracts";
 
@@ -32,16 +28,7 @@ import { addTallyResultsBatch, createMessage } from "./utils/maci";
 
 import { DEFAULT_CIRCUIT, getCircuitFiles } from "./utils/circuits";
 
-import { MaciParameters } from "./utils/maciParameters";
-
 import { JSONFile } from "./utils/JSONFile";
-
-import {
-  UNIT,
-  ALPHA_PRECISION,
-  DEFAULT_GET_LOG_BATCH_SIZE,
-  DEFAULT_SR_QUEUE_OPS,
-} from "./utils/constants";
 
 import { getIpfsHash } from "./utils/ipfs";
 
@@ -51,10 +38,8 @@ import {
   genProofs,
   proveOnChain,
   GenProofsArgs,
-  genLocalState,
-  verify,
-  TallyData,
   publish,
+  PublishArgs,
 } from "maci-cli";
 
 import type { EthereumProvider } from "hardhat/types";
@@ -64,26 +49,14 @@ import {
   ClonableMACI,
   ClonablePoll,
   ClonableTally,
-  ClonableMessageProcessor,
   Allo,
 } from "../typechain-types";
-import {
-  STATE_TREE_DEPTH,
-  deployTestContracts,
-  maxValues,
-  messageBatchSize,
-  timeTravel,
-  treeDepths,
-} from "./utils";
+import { deployTestContracts, timeTravel } from "./utils";
 import { QVMACIInterface } from "../typechain-types/contracts/strategies/qv-maci/QVMACI";
 import { ClonableMACIInterface } from "../typechain-types/contracts/ClonableMaciContracts/ClonableMACI";
 
 import { getTalyFilePath, isPathExist } from "./utils/misc";
 import path from "path";
-
-import { genMaciStateFromContract } from "maci-contracts";
-
-import os from "os";
 
 /**
  * Merge MACI message and signups subtrees
@@ -131,7 +104,10 @@ const circuitDirectory = process.env.CIRCUIT_DIRECTORY || "./../zkeys/zkeys";
 const proofOutputDirectory = process.env.PROOF_OUTPUT_DIR || "./proof_output";
 const tallyBatchSize = Number(process.env.TALLY_BATCH_SIZE || 8);
 
-describe("e2e", () => {
+const voteOptionTreeDepth = 3;
+
+describe("e2e", function test() {
+  this.timeout(9000000000000000);
   let mpContract: MessageProcessor;
   let poll: Poll;
 
@@ -148,8 +124,6 @@ describe("e2e", () => {
   // create a new user keypair
   const keypair = new Keypair();
   let coordinatorKeypair: Keypair;
-  let proofOutputDirectory = "proofs";
-  let DEFAULT_GET_LOG_BATCH_SIZE = 1000;
   let maciTransactionHash: string;
   let iface: QVMACIInterface;
   let ifaceClonableMACI: ClonableMACIInterface;
@@ -159,9 +133,7 @@ describe("e2e", () => {
   let pollContract: ClonablePoll;
   let tallyContract: ClonableTally;
   let AlloContract: Allo;
-
   let deployTime: number;
-
   let quiet = true as any;
 
   before(async () => {
@@ -225,51 +197,31 @@ describe("e2e", () => {
       await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
         recipientAddress
       );
-    const command = new PCommand(
-      1n,
-      keypair.pubKey,
-      votingOption,
-      9n,
-      0n,
-      0n,
-      0n
-    );
-    const signature = command.sign(keypair.privKey);
-    const sharedKey = Keypair.genEcdhSharedKey(
-      keypair.privKey,
-      coordinatorKeypair.pubKey
-    );
-    const message = command.encrypt(signature, sharedKey);
-    const messageContractParam = message.asContractParam();
-
-    // merge the trees
-    const _pollContract = pollContract.connect(Coordinator);
-
-    await _pollContract.publishMessage(
-      messageContractParam,
-      keypair.pubKey.asContractParam()
-    );
 
     const maciAddress = await maciContract.getAddress();
 
-    await timeTravel(Coordinator.provider as unknown as EthereumProvider, 600);
+    await publish({
+      pubkey: keypair.pubKey.serialize(),
+      stateIndex: 1n,
+      voteOptionIndex: votingOption,
+      nonce: 1n,
+      pollId: 0n,
+      newVoteWeight: 9n,
+      maciContractAddress: maciAddress,
+      salt: genRandomSalt(),
+      privateKey: keypair.privKey.serialize(),
+      signer: allocator,
+    } as PublishArgs);
+
+    await timeTravel(Coordinator.provider as unknown as EthereumProvider, 700);
 
     await mergeMaciSubtrees({
       maciAddress,
-      // pollId,
       pollId: 0n,
-      numQueueOps: DEFAULT_SR_QUEUE_OPS,
+      numQueueOps: "1",
       signer: Coordinator,
+      quiet: false,
     });
-
-    const maciState = await genMaciStateFromContract(
-      Coordinator.provider!,
-      maciAddress,
-      coordinatorKeypair,
-      0n
-    );
-
-    const state = maciState.toJSON();
 
     const random = Math.floor(Math.random() * 10 ** 8);
 
@@ -327,7 +279,7 @@ describe("e2e", () => {
       messageProcessorAddress,
       tallyAddress,
       signer: Coordinator,
-      quiet,
+      quiet: false,
     });
 
     console.log("finished proveOnChain");
@@ -339,8 +291,10 @@ describe("e2e", () => {
     console.log("Tally hash", tallyHash);
 
     // add tally results to funding round
-    const recipientTreeDepth = treeDepths.voteOptionTreeDepth;
-    console.log("Adding tally result on chain in batches of", tallyBatchSize);
+    const recipientTreeDepth = voteOptionTreeDepth;
+
+    console.log("Adding tally result on chain in batches of", tallyBatchSize)
+
     await addTallyResultsBatch(
       QVMaciStrategy.connect(Coordinator) as QVMACI,
       recipientTreeDepth,
@@ -373,6 +327,6 @@ describe("e2e", () => {
   it("Recipient should have more than 0 votes received", async () => {
     let recipientAddress = await recipient1.getAddress();
     let recipient = await QVMaciStrategy.recipients(recipientAddress);
-    // expect(recipient.totalVotesReceived).to.be.gt(0);
+    expect(recipient.totalVotesReceived).to.be.gt(0);
   });
 });

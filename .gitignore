@@ -21,3 +21,6 @@ package-lock.json
 
 # ZKEYS files
 /zkeys
+
+# Generated proof files
+/proofs

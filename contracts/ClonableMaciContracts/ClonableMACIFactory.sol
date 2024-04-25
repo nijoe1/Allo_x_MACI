@@ -4,8 +4,7 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts-upgradeable/proxy/ClonesUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { ClonableMACI } from "./ClonableMACI.sol";
-import { ClonableAccQueueQuinaryMaci } from "./ClonableAccQueueQuinaryMaci.sol";
-import { ClonableAccQueueQuinaryBlankSl } from "./ClonableAccQueueQuinaryBlankSl.sol";
+import {AccQueueQuinaryMaci} from "maci-contracts/contracts/trees/AccQueueQuinaryMaci.sol";
 import { ClonablePoll } from "./ClonablePoll.sol";
 import { ClonableTally } from "./ClonableTally.sol";
 import { ClonableMessageProcessor } from "./ClonableMessageProcessor.sol";
@@ -32,10 +31,6 @@ contract ClonableMACIFactory is OwnableUpgradeable {
     // The clonable strategy to use for the pools
     address internal clonableMaciImplementation;
 
-    address internal AccQueueQuinaryBlankSlImplementation;
-
-    address internal AccQueueQuinaryMaciImplementation;
-
     address internal PollImplementation;
 
     address internal TallyImplementation;
@@ -51,8 +46,6 @@ contract ClonableMACIFactory is OwnableUpgradeable {
         address _verifier,
         address _vkRegistry,
         address _clonableMaciImplementation,
-        address _AccQueueQuinaryBlankSlImplementation,
-        address _AccQueueQuinaryMaciImplementation,
         address _PollImplementation,
         address _TallyImplementation,
         address _MessageProcessorImplementation
@@ -65,8 +58,6 @@ contract ClonableMACIFactory is OwnableUpgradeable {
         verifier = _verifier;
         vkRegistry = _vkRegistry;
         clonableMaciImplementation = _clonableMaciImplementation;
-        AccQueueQuinaryBlankSlImplementation = _AccQueueQuinaryBlankSlImplementation;
-        AccQueueQuinaryMaciImplementation = _AccQueueQuinaryMaciImplementation;
         PollImplementation = _PollImplementation;
         TallyImplementation = _TallyImplementation;
         MessageProcessorImplementation = _MessageProcessorImplementation;
@@ -80,17 +71,6 @@ contract ClonableMACIFactory is OwnableUpgradeable {
     ) external returns (address _cloneMaci) {
         _cloneMaci = ClonesUpgradeable.cloneDeterministic(clonableMaciImplementation, bytes32(deployNonce++));
 
-        address stateAccQueue = ClonesUpgradeable.cloneDeterministic(
-            AccQueueQuinaryBlankSlImplementation,
-            bytes32(deployNonce++)
-        );
-
-        ClonableAccQueueQuinaryBlankSl cloneAccQueue = ClonableAccQueueQuinaryBlankSl(stateAccQueue);
-
-        cloneAccQueue.initialize(STATE_TREE_SUBDEPTH);
-
-        cloneAccQueue.transferOwnership(_cloneMaci);
-
         ClonableMACI(_cloneMaci).initialize(
             address(this),
             stateTreeDepth,
@@ -100,8 +80,7 @@ contract ClonableMACIFactory is OwnableUpgradeable {
             _signUpGatekeeper,
             _initialVoiceCreditProxy,
             _topupCredit,
-            _coordinator,
-            stateAccQueue
+            _coordinator
         );
 
         ClonableMACI(_cloneMaci).transferOwnership(msg.sender);
@@ -133,15 +112,7 @@ contract ClonableMACIFactory is OwnableUpgradeable {
             revert("InvalidMaxValues");
         }
 
-        /// @notice deploy a new AccQueue contract to store messages
-        address _cloneAccQueue = ClonesUpgradeable.cloneDeterministic(
-            AccQueueQuinaryMaciImplementation,
-            bytes32(deployNonce++)
-        );
-
-        ClonableAccQueueQuinaryMaci(_cloneAccQueue).initialize(_treeDepths.messageTreeSubDepth);
-
-        AccQueue messageAq = AccQueue(_cloneAccQueue);
+        AccQueue messageAq = AccQueue(address(0));
 
         /// @notice the smart contracts that a Poll would interact with
         Params.ExtContracts memory extContracts = Params.ExtContracts({
@@ -155,10 +126,6 @@ contract ClonableMACIFactory is OwnableUpgradeable {
         ClonablePoll _poll = ClonablePoll(poll);
 
         _poll.initialize(_duration, _maxValues, _treeDepths, _coordinatorPubKey, extContracts);
-
-        // Make the Poll contract own the messageAq contract, so only it can
-        // run enqueue/merge
-        messageAq.transferOwnership(address(poll));
 
         // init Poll
         _poll.init();

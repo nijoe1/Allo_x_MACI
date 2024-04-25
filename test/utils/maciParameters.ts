@@ -101,44 +101,4 @@ export class MaciParameters {
 
     return deployParams;
   }
-
-  static mock(): MaciParameters {
-    const processVk = VerifyingKey.fromObj({
-      protocol: 1,
-      curve: 1,
-      nPublic: 1,
-      vk_alpha_1: [1, 2],
-      vk_beta_2: [
-        [1, 2],
-        [1, 2],
-      ],
-      vk_gamma_2: [
-        [1, 2],
-        [1, 2],
-      ],
-      vk_delta_2: [
-        [1, 2],
-        [1, 2],
-      ],
-      vk_alphabeta_12: [[[1, 2, 3]]],
-      IC: [[1, 2]],
-    });
-
-    // use smaller voteOptionTreeDepth for testing
-    const params = {
-      treeDepths: {
-        intStateTreeDepth: 2,
-        messageTreeSubDepth: 2,
-        messageTreeDepth: 8,
-        voteOptionTreeDepth: 2,
-      },
-    };
-
-    return new MaciParameters({
-      stateTreeDepth: 6,
-      ...params.treeDepths,
-      processVk,
-      tallyVk: processVk.copy(),
-    });
-  }
 }
