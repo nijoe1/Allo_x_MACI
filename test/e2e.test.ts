@@ -11,11 +11,12 @@ import {
 } from "ethers";
 import { existsSync, mkdirSync } from "fs";
 
-import { Keypair, Message, PCommand, PubKey } from "maci-domainobjs";
+import { Keypair, Message, PCommand, PrivKey, PubKey } from "maci-domainobjs";
 import { ITallyCircuitInputs, MaciState, Poll } from "maci-core";
 import {
   genTreeCommitment as genTallyResultCommitment,
   genRandomSalt,
+  PrivKey,
 } from "maci-crypto";
 import {
   MessageProcessor,
@@ -63,6 +64,70 @@ import { getTalyFilePath, isPathExist } from "./utils/misc";
 import path from "path";
 
 /**
+ * Interface that represents user publish message
+ */
+export interface IPublishMessage {
+  /**
+   * The index of the state leaf
+   */
+  stateIndex: bigint;
+
+  /**
+   * The index of the vote option
+   */
+  voteOptionIndex: bigint;
+
+  /**
+   * The nonce of the message
+   */
+  nonce: bigint;
+
+  /**
+   * The new vote weight
+   */
+  newVoteWeight: bigint;
+}
+
+/**
+ * Interface for the arguments to the batch publish command
+ */
+export interface IPublishBatchArgs {
+  /**
+   * User messages
+   */
+  messages: IPublishMessage[];
+
+  /**
+   * The id of the poll
+   */
+  pollId: bigint;
+
+  /**
+   * The address of the MACI contract
+   */
+  Poll: ClonablePoll;
+
+  /**
+   * The public key of the user
+   */
+  publicKey: string;
+
+  /**
+   * The private key of the user
+   */
+  privateKey: string;
+
+  /**
+   * A signer object
+   */
+  signer: Signer;
+
+  /**
+   * Whether to log the output
+   */
+  quiet?: boolean;
+}
+/**
  * Merge MACI message and signups subtrees
  * Must merge the subtrees before calling genProofs
  * @param maciAddress MACI contract address
@@ -101,6 +166,104 @@ export async function mergeMaciSubtrees({
     quiet,
   });
 }
+
+export const publishBatch = async ({
+  messages,
+  pollId,
+  Poll,
+  publicKey,
+  privateKey,
+  signer,
+}: IPublishBatchArgs) => {
+  if (!PubKey.isValidSerializedPubKey(publicKey)) {
+    throw new Error("invalid MACI public key");
+  }
+
+  if (!PrivKey.isValidSerializedPrivKey(privateKey)) {
+    throw new Error("invalid MACI private key");
+  }
+
+  if (pollId < 0n) {
+    throw new Error(`invalid poll id ${pollId}`);
+  }
+
+  const userMaciPubKey = PubKey.deserialize(publicKey);
+  const userMaciPrivKey = PrivKey.deserialize(privateKey);
+  const pollContract = Poll.connect(signer);
+
+  const [maxValues, coordinatorPubKeyResult] = await Promise.all([
+    pollContract.maxValues(),
+    pollContract.coordinatorPubKey(),
+  ]);
+  const maxVoteOptions = Number(maxValues.maxVoteOptions);
+
+  // validate the vote options index against the max leaf index on-chain
+  messages.forEach(({ stateIndex, voteOptionIndex, salt, nonce }) => {
+    if (voteOptionIndex < 0 || maxVoteOptions < voteOptionIndex) {
+      throw new Error("invalid vote option index");
+    }
+
+    // check < 1 cause index zero is a blank state leaf
+    if (stateIndex < 1) {
+      throw new Error("invalid state index");
+    }
+
+    if (nonce < 0) {
+      throw new Error("invalid nonce");
+    }
+  });
+
+  const coordinatorPubKey = new PubKey([
+    BigInt(coordinatorPubKeyResult.x.toString()),
+    BigInt(coordinatorPubKeyResult.y.toString()),
+  ]);
+
+  const encryptionKeypair = new Keypair();
+  const sharedKey = Keypair.genEcdhSharedKey(
+    encryptionKeypair.privKey,
+    coordinatorPubKey
+  );
+
+  const payload: any[] = messages.map(
+    ({ salt, stateIndex, voteOptionIndex, newVoteWeight, nonce }) => {
+      const userSalt = salt ? BigInt(salt) : genRandomSalt();
+
+      // create the command object
+      const command = new PCommand(
+        stateIndex,
+        userMaciPubKey,
+        voteOptionIndex,
+        newVoteWeight,
+        nonce,
+        BigInt(pollId),
+        userSalt
+      );
+
+      // sign the command with the user private key
+      const signature = command.sign(userMaciPrivKey);
+
+      const message = command.encrypt(signature, sharedKey);
+
+      return [
+        message.asContractParam(),
+        encryptionKeypair.pubKey.asContractParam(),
+      ];
+    }
+  );
+
+  const preparedMessages = payload.map(([message]) => message);
+  const preparedKeys = payload.map(([, key]) => key);
+
+  const receipt = await pollContract
+    .publishMessageBatch(preparedMessages.reverse(), preparedKeys.reverse())
+    .then((tx) => tx.wait());
+
+  return {
+    hash: receipt?.hash,
+    encryptedMessages: preparedMessages,
+    privateKey: encryptionKeypair.privKey.serialize(),
+  };
+};
 
 // MACI zkFiles
 const circuit = process.env.CIRCUIT_TYPE || DEFAULT_CIRCUIT;
@@ -207,7 +370,10 @@ describe("e2e", function test() {
     let status = 2; // Accepted
     const ReviewRecipientTx = await QVMaciStrategy.connect(
       Coordinator
-    ).reviewRecipients([recipientAddress1, recipientAddress2], [status, status]);
+    ).reviewRecipients(
+      [recipientAddress1, recipientAddress2],
+      [status, status]
+    );
     await ReviewRecipientTx.wait();
 
     // create 1 vote message for the recipient1
@@ -218,24 +384,24 @@ describe("e2e", function test() {
 
     const maciAddress = await maciContract.getAddress();
 
-    await publish({
-      pubkey: keypair.pubKey.serialize(),
-      stateIndex: 1n,
-      voteOptionIndex: votingOption1,
-      nonce: 1n,
-      pollId: 0n,
-      newVoteWeight: 10n,
-      maciContractAddress: maciAddress,
-      salt: genRandomSalt(),
-      privateKey: keypair.privKey.serialize(),
-      signer: allocator,
-    } as PublishArgs);
+    // await publish({
+    //   pubkey: keypair.pubKey.serialize(),
+    //   stateIndex: 1n,
+    //   voteOptionIndex: votingOption1,
+    //   nonce: 1n,
+    //   pollId: 0n,
+    //   newVoteWeight: 10n,
+    //   maciContractAddress: maciAddress,
+    //   salt: genRandomSalt(),
+    //   privateKey: keypair.privKey.serialize(),
+    //   signer: allocator,
+    // } as PublishArgs);
 
     // create 1 vote message for the recipient1
-    // const votingOption2 =
-    //   await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
-    //     recipientAddress2
-    //   );
+    const votingOption2 =
+      await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
+        recipientAddress2
+      );
 
     // await publish({
     //   pubkey: keypair.pubKey.serialize(),
@@ -249,6 +415,28 @@ describe("e2e", function test() {
     //   privateKey: keypair.privKey.serialize(),
     //   signer: allocator,
     // } as PublishArgs);
+
+    await publishBatch({
+      messages: [
+        {
+          stateIndex: 1n,
+          voteOptionIndex: votingOption1,
+          nonce: 1n,
+          newVoteWeight: 1n,
+        },
+        {
+          stateIndex: 1n,
+          voteOptionIndex: votingOption2,
+          nonce: 2n,
+          newVoteWeight: 5n,
+        },
+      ],
+      pollId: 0n,
+      Poll: pollContract,
+      publicKey: keypair.pubKey.serialize(),
+      privateKey: keypair.privKey.serialize(),
+      signer: allocator,
+    });
 
     await timeTravel(Coordinator.provider as unknown as EthereumProvider, 700);
 
@@ -341,12 +529,12 @@ describe("e2e", function test() {
       Number(votingOption1)
     );
 
-    // await addTallyResult(
-    //   QVMaciStrategy.connect(Coordinator) as QVMACI,
-    //   recipientTreeDepth,
-    //   tally,
-    //   Number(votingOption2)
-    // );
+    await addTallyResult(
+      QVMaciStrategy.connect(Coordinator) as QVMACI,
+      recipientTreeDepth,
+      tally,
+      Number(votingOption2)
+    );
 
     console.log("Finished adding tally results");
   });
@@ -357,7 +545,7 @@ describe("e2e", function test() {
     console.log("Recipient", recipient);
 
     expect(recipient.totalVotesReceived).to.be.eq(
-      Math.floor(Math.sqrt(10 * 10 ** 18))
+      Math.floor(Math.sqrt(1 * 10 ** 18))
     );
   });
 
@@ -382,7 +570,6 @@ describe("e2e", function test() {
       recipientTreeDepth
     );
 
-
     console.log(
       "Tally total spent voice credits",
       tally.totalSpentVoiceCredits.spent
@@ -406,12 +593,12 @@ describe("e2e", function test() {
     const recipient1Balance = await ethers.provider.getBalance(
       await recipient1.getAddress()
     );
-    // const recipient2Balance = await ethers.provider.getBalance(
-    //   await recipient2.getAddress()
-    // );
+    const recipient2Balance = await ethers.provider.getBalance(
+      await recipient2.getAddress()
+    );
     const recipientIDs = [
       await recipient1.getAddress(),
-      // await recipient2.getAddress(),
+      await recipient2.getAddress(),
     ];
     let distributeFunds = await AlloContract.connect(Coordinator).distribute(
       1,
@@ -427,11 +614,17 @@ describe("e2e", function test() {
       await recipient2.getAddress()
     );
 
-    console.log("Recipient 1 balance before Distribution: ",recipient1Balance, " & After : ",  recipient1BalanceAfterDistribution);
-    // console.log("Recipient 2 balance before Distribution: ",recipient2Balance, " & After : ",  recipient2BalanceAfterDistribution);
+    console.log(
+      "Recipient 1 balance before Distribution: ",
+      recipient1Balance,
+      " & After : ",
+      recipient1BalanceAfterDistribution
+    );
+    console.log("Recipient 2 balance before Distribution: ",recipient2Balance, " & After : ",  recipient2BalanceAfterDistribution);
 
-    expect(recipient1BalanceAfterDistribution).to.be.greaterThan(recipient1Balance);
-    // expect(recipient2BalanceAfterDistribution).to.be.greaterThan(recipient2Balance);
-
+    expect(recipient1BalanceAfterDistribution).to.be.greaterThan(
+      recipient1Balance
+    );
+    expect(recipient2BalanceAfterDistribution).to.be.greaterThan(recipient2Balance);
   });
 });
