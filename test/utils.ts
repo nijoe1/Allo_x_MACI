@@ -332,7 +332,7 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     // AllocationEndTime
     BigInt(time + BigInt(500)),
     // MaxVoiceCreditsPerAllocator
-    BigInt(100),
+    BigInt(10000),
   ];
 
   let CoordinatorKeypair = new Keypair();

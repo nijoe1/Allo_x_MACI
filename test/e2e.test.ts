@@ -333,13 +333,13 @@ describe("e2e", function test() {
 
     // Add allocator
     const addAllocatorTx = await QVMaciStrategy.addAllocator(
-      await allocator.getAddress(),
+      await allocator.getAddress()
     );
     await addAllocatorTx.wait();
 
     // signup
     const SignUpTx = await QVMaciStrategy.connect(allocator).signup(
-      keypair.pubKey.asContractParam(),
+      keypair.pubKey.asContractParam()
     );
     await SignUpTx.wait();
 
@@ -347,39 +347,39 @@ describe("e2e", function test() {
     let recipientAddress1 = await recipient1.getAddress();
     let data = AbiCoder.defaultAbiCoder().encode(
       ["address", "address", "(uint256,string)"],
-      [recipientAddress1, ZeroAddress, [1n, "Project 1"]],
+      [recipientAddress1, ZeroAddress, [1n, "Project 1"]]
     );
 
     const RecipientRegistrationTx = await AlloContract.connect(
-      recipient1,
+      recipient1
     ).registerRecipient(1n, data);
     await RecipientRegistrationTx.wait();
 
     let recipientAddress2 = await recipient2.getAddress();
     data = AbiCoder.defaultAbiCoder().encode(
       ["address", "address", "(uint256,string)"],
-      [recipientAddress2, ZeroAddress, [1n, "Project 2"]],
+      [recipientAddress2, ZeroAddress, [1n, "Project 2"]]
     );
 
     const RecipientRegistrationTx2 = await AlloContract.connect(
-      recipient2,
+      recipient2
     ).registerRecipient(1n, data);
     await RecipientRegistrationTx2.wait();
 
     // Review Acccept recipient
     let status = 2; // Accepted
     const ReviewRecipientTx = await QVMaciStrategy.connect(
-      Coordinator,
+      Coordinator
     ).reviewRecipients(
       [recipientAddress1, recipientAddress2],
-      [status, status],
+      [status, status]
     );
     await ReviewRecipientTx.wait();
 
     // create 1 vote message for the recipient1
     const votingOption1 =
       await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
-        recipientAddress1,
+        recipientAddress1
       );
 
     const maciAddress = await maciContract.getAddress();
@@ -387,22 +387,30 @@ describe("e2e", function test() {
     // create 1 vote message for the recipient1
     const votingOption2 =
       await QVMaciStrategy.connect(Coordinator).recipientIdToIndex(
-        recipientAddress2,
+        recipientAddress2
       );
-
+    // When submitting to the same vote index, the last vote weight will be the final vote weight
+    // When voting weight is 5 that means that the circouts will calculate the square of the weight so 5^2 = 25
+    // BUt the final vote weight will be 5
     await publishBatch({
       messages: [
         {
           stateIndex: 1n,
           voteOptionIndex: votingOption1,
           nonce: 1n,
-          newVoteWeight: 1n,
+          newVoteWeight: 95n,
         },
         {
           stateIndex: 1n,
           voteOptionIndex: votingOption2,
           nonce: 2n,
           newVoteWeight: 5n,
+        },
+        {
+          stateIndex: 1n,
+          voteOptionIndex: votingOption1,
+          nonce: 3n,
+          newVoteWeight: 30n,
         },
       ],
       pollId: 0n,
@@ -501,7 +509,6 @@ describe("e2e", function test() {
       recipientTreeDepth,
       tally,
       tallyBatchSize
-      
     );
 
     // await addTallyResult(
@@ -527,7 +534,7 @@ describe("e2e", function test() {
     console.log("Recipient", recipient);
 
     expect(recipient.totalVotesReceived).to.be.eq(
-      Math.floor(Math.sqrt(1 * 10 ** 18)),
+      Math.floor(Math.sqrt(30 * 10 ** 18))
     );
   });
 
@@ -543,18 +550,18 @@ describe("e2e", function test() {
     const newResultCommitment = genTallyResultCommitment(
       tally.results.tally.map((x: string) => BigInt(x)),
       BigInt(tally.results.salt),
-      recipientTreeDepth,
+      recipientTreeDepth
     );
 
     const perVOSpentVoiceCreditsCommitment = genTallyResultCommitment(
       tally.perVOSpentVoiceCredits.tally.map((x: string) => BigInt(x)),
       BigInt(tally.perVOSpentVoiceCredits.salt),
-      recipientTreeDepth,
+      recipientTreeDepth
     );
 
     console.log(
       "Tally total spent voice credits",
-      tally.totalSpentVoiceCredits.spent,
+      tally.totalSpentVoiceCredits.spent
     );
 
     // Finalize round
@@ -562,7 +569,7 @@ describe("e2e", function test() {
       tally.totalSpentVoiceCredits.spent,
       tally.totalSpentVoiceCredits.salt,
       newResultCommitment.toString(),
-      perVOSpentVoiceCreditsCommitment.toString(),
+      perVOSpentVoiceCreditsCommitment.toString()
     );
 
     let receipt = await finalize.wait();
@@ -574,14 +581,14 @@ describe("e2e", function test() {
   it("Should Distribute Founds", async () => {
     console.log(
       "Pool Balance Before Distribution",
-      await ethers.provider.getBalance(await QVMaciStrategy.getAddress()),
+      await ethers.provider.getBalance(await QVMaciStrategy.getAddress())
     );
 
     const recipient1Balance = await ethers.provider.getBalance(
-      await recipient1.getAddress(),
+      await recipient1.getAddress()
     );
     const recipient2Balance = await ethers.provider.getBalance(
-      await recipient2.getAddress(),
+      await recipient2.getAddress()
     );
     const recipientIDs = [
       await recipient1.getAddress(),
@@ -590,15 +597,15 @@ describe("e2e", function test() {
     let distributeFunds = await AlloContract.connect(Coordinator).distribute(
       1,
       recipientIDs,
-      "0x00",
+      "0x00"
     );
     let receipt = await distributeFunds.wait();
 
     const recipient1BalanceAfterDistribution = await ethers.provider.getBalance(
-      await recipient1.getAddress(),
+      await recipient1.getAddress()
     );
     const recipient2BalanceAfterDistribution = await ethers.provider.getBalance(
-      await recipient2.getAddress(),
+      await recipient2.getAddress()
     );
 
     console.log(
@@ -606,24 +613,28 @@ describe("e2e", function test() {
       recipient1Balance,
       " & After : ",
       recipient1BalanceAfterDistribution,
+      " & Difference: ",
+      Number(recipient1BalanceAfterDistribution - recipient1Balance) / 10 ** 18
     );
     console.log(
       "Recipient 2 balance before Distribution: ",
       recipient2Balance,
       " & After : ",
       recipient2BalanceAfterDistribution,
+      " & Difference: ",
+      Number(recipient2BalanceAfterDistribution - recipient2Balance) / 10 ** 18
     );
 
     expect(recipient1BalanceAfterDistribution).to.be.greaterThan(
-      recipient1Balance,
+      recipient1Balance
     );
     expect(recipient2BalanceAfterDistribution).to.be.greaterThan(
-      recipient2Balance,
+      recipient2Balance
     );
 
     console.log(
       "Pool Balance After Distribution",
-      await ethers.provider.getBalance(await QVMaciStrategy.getAddress()),
+      await ethers.provider.getBalance(await QVMaciStrategy.getAddress())
     );
   });
 });
