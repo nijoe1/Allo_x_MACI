@@ -566,6 +566,10 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
         }
     }
 
+    function totalRecipients() external view returns (uint256) {
+        return _recipientCounter.current();
+    }
+
     /// @notice Contract should be able to receive NATIVE
     receive() external payable {}
 }

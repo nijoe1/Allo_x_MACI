@@ -56,15 +56,15 @@ export class MaciParameters {
 
   static async fromConfig(
     circuit: string,
-    directory: string
+    directory: string,
   ): Promise<MaciParameters> {
     const params = CIRCUITS[circuit];
     const { processZkFile, tallyZkFile } = getCircuitFiles(circuit, directory);
     const processVk: VerifyingKey = VerifyingKey.fromObj(
-      await extractVk(processZkFile)
+      await extractVk(processZkFile),
     );
     const tallyVk: VerifyingKey = VerifyingKey.fromObj(
-      await extractVk(tallyZkFile)
+      await extractVk(tallyZkFile),
     );
 
     return new MaciParameters({
@@ -96,7 +96,7 @@ export class MaciParameters {
   static async mock2(): Promise<MaciParameters> {
     const deployParams = await MaciParameters.fromConfig(
       "micro",
-      "./../zkeys/zkeys"
+      "./../zkeys/zkeys",
     );
 
     return deployParams;

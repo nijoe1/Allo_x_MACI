@@ -15,14 +15,13 @@ integrated into Allo protocol QF mechanism
 ## How to run it
 
 - Download ZKeys
-    - `chmod +x download_artifacts.sh`
-    - `./download_artifacts.sh`
+
+  - `chmod +x download_artifacts.sh`
+  - `./download_artifacts.sh`
 
 - `yarn install`
 - `npx hardhat node`
-    - `copy 4 private-keys and paste them into .env.example`
-    - `rename .env.example to .env`
+  - `copy 4 private-keys and paste them into .env.example`
+  - `rename .env.example to .env`
 - `open a new terminal`
 - `yarn test:live`
-
-

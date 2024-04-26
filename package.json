@@ -6,7 +6,6 @@
   "scripts": {
     "compile": "hardhat compile",
     "compileSol": "TS_NODE_TRANSPILE_ONLY=1 ts-node ./scripts/compileSol.ts",
-
     "test:solidity": "hardhat test --network arbsepolia",
     "test:live": "hardhat test --network localhost",
     "prettier:write": "prettier --write . --write **/*",

@@ -357,16 +357,19 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
         Recipient storage recipient = recipients[recipientId];
 
         if (recipient.tallyVerified) {
-            revert VoteResultsAlreadyVerified();
+            return;
+            // revert VoteResultsAlreadyVerified();
         }
 
         recipient.tallyVerified = true;
 
         // check that the recipient is accepted
-        if (!_isAcceptedRecipient(recipientId)) revert RECIPIENT_ERROR(recipientId);
+        if (!_isAcceptedRecipient(recipientId))  return;
+        // revert RECIPIENT_ERROR(recipientId);
 
         // check the `_voiceCreditsToAllocate` is > 0
-        if (_voiceCreditsToAllocate == 0) revert INVALID();
+        if (_voiceCreditsToAllocate == 0)  return;
+        // revert INVALID();
 
         // determine actual votes cast
         uint256 voteResult = _sqrt(_voiceCreditsToAllocate * 1e18);

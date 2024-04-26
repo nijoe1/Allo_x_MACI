@@ -219,27 +219,27 @@ export async function addTallyResultsBatch(
   recipientTreeDepth: number,
   tallyData: any,
   batchSize: number,
-  startIndex = 0,
-  callback?: (processed: number, receipt: ContractTransactionReceipt) => void
+  startIndex = 1,
+  callback?: (processed: number, receipt: ContractTransactionReceipt) => void,
 ): Promise<number> {
   let totalGasUsed = 0;
   const { tally } = tallyData.results;
 
   const spentVoiceCreditsHash = hashLeftRight(
     BigInt(tallyData.totalSpentVoiceCredits.spent),
-    BigInt(tallyData.totalSpentVoiceCredits.salt)
+    BigInt(tallyData.totalSpentVoiceCredits.salt),
   );
 
   const perVOSpentVoiceCreditsHash = genTallyResultCommitment(
     tallyData.perVOSpentVoiceCredits.tally.map((x: string) => BigInt(x)),
     BigInt(tallyData.perVOSpentVoiceCredits.salt),
-    recipientTreeDepth
+    recipientTreeDepth,
   );
 
   const newResultCommitment = genTallyResultCommitment(
     tally.map((x: string) => BigInt(x)),
     BigInt(tallyData.results.salt),
-    recipientTreeDepth
+    recipientTreeDepth,
   );
 
   const newTallyCommitment = hash3([
@@ -252,25 +252,27 @@ export async function addTallyResultsBatch(
     console.error(
       "Error: the newTallyCommitment is invalid.",
       "0x" + newTallyCommitment.toString(16),
-      tallyData.newTallyCommitment
+      tallyData.newTallyCommitment,
     );
   }
 
-  for (let i = startIndex; i < tally.length; i = i + batchSize) {
+  let totalRecipients = await QVMACI.totalRecipients();
+
+  for (let i = startIndex; i < totalRecipients + 1n; i = i + batchSize) {
     const proofs = getTallyResultProofBatch(
       i,
       recipientTreeDepth,
       tallyData,
-      batchSize
+      batchSize,
     );
-
+    proofs.map((i) => console.log(i.result));
     const tx = await QVMACI.addTallyResultsBatch(
       proofs.map((i) => i.recipientIndex),
       proofs.map((i) => i.result),
       proofs.map((i) => i.proof),
       BigInt(tallyData.results.salt),
       spentVoiceCreditsHash,
-      BigInt(perVOSpentVoiceCreditsHash)
+      BigInt(perVOSpentVoiceCreditsHash),
     );
     const receipt = await tx.wait();
     if (receipt?.status !== 1) {
@@ -288,30 +290,32 @@ export async function addTallyResultsBatch(
   return totalGasUsed;
 }
 
-export async function addTallyResult(
+export async function addTallyResultsBatch2(
   QVMACI: QVMACI,
   recipientTreeDepth: number,
   tallyData: any,
-  index: number
-) {
+  batchSize: number,
+  startIndex = 1,
+  callback?: (processed: number, receipt: ContractTransactionReceipt) => void,
+): Promise<number> {
   let totalGasUsed = 0;
   const { tally } = tallyData.results;
 
   const spentVoiceCreditsHash = hashLeftRight(
     BigInt(tallyData.totalSpentVoiceCredits.spent),
-    BigInt(tallyData.totalSpentVoiceCredits.salt)
+    BigInt(tallyData.totalSpentVoiceCredits.salt),
   );
 
   const perVOSpentVoiceCreditsHash = genTallyResultCommitment(
     tallyData.perVOSpentVoiceCredits.tally.map((x: string) => BigInt(x)),
     BigInt(tallyData.perVOSpentVoiceCredits.salt),
-    recipientTreeDepth
+    recipientTreeDepth,
   );
 
   const newResultCommitment = genTallyResultCommitment(
     tally.map((x: string) => BigInt(x)),
     BigInt(tallyData.results.salt),
-    recipientTreeDepth
+    recipientTreeDepth,
   );
 
   const newTallyCommitment = hash3([
@@ -324,7 +328,117 @@ export async function addTallyResult(
     console.error(
       "Error: the newTallyCommitment is invalid.",
       "0x" + newTallyCommitment.toString(16),
-      tallyData.newTallyCommitment
+      tallyData.newTallyCommitment,
+    );
+  }
+
+  let totalRecipients = await QVMACI.totalRecipients();
+
+  async function getValidProofs(startIndex, batchSize) {
+    let proofs = getTallyResultProofBatch(
+      startIndex,
+      recipientTreeDepth,
+      tallyData,
+      batchSize,
+    );
+    let validProofs = proofs.filter((i) => i.result !== "0");
+    console.log("Valid proofs", validProofs.length);
+    console.log("Total recipients", totalRecipients);
+    console.log("Batch size", batchSize);
+
+    // Reduce batch size until it fits or we reach individual handling
+    while (validProofs.length < batchSize && batchSize > 1) {
+      batchSize--;
+      proofs = getTallyResultProofBatch(
+        startIndex,
+        recipientTreeDepth,
+        tallyData,
+        batchSize,
+      );
+      validProofs = proofs.filter((i) => i.result !== "0");
+    }
+
+    return validProofs;
+  }
+
+  for (let i = startIndex; i < totalRecipients + 1n; i = i + batchSize) {
+    const validProofs = await getValidProofs(i, batchSize);
+
+    // Handle individual recipients if the batch size was reduced
+    let individualStart = i + validProofs.length;
+    if (individualStart <= totalRecipients) {
+      for (let j = individualStart; j <= totalRecipients; j++) {
+        const singleProof = getTallyResultProofBatch(
+          j,
+          recipientTreeDepth,
+          tallyData,
+          1,
+        );
+        if (singleProof.result !== "0") {
+          // ... Process singleProof ...
+        }
+      }
+    }
+    console.log("Valid proofs", validProofs);
+    // Process the valid batch directly
+    const tx = await QVMACI.addTallyResultsBatch(
+      validProofs.map((i) => i.recipientIndex),
+      validProofs.map((i) => i.result),
+      validProofs.map((i) => i.proof),
+      BigInt(tallyData.results.salt),
+      spentVoiceCreditsHash,
+      BigInt(perVOSpentVoiceCreditsHash),
+    );
+
+    const receipt = await tx.wait();
+    if (receipt?.status !== 1) {
+      throw new Error("Failed to add tally results on chain");
+    }
+
+    if (callback) callback(i + validProofs.length, receipt);
+    totalGasUsed = totalGasUsed + Number(receipt.gasUsed);
+  }
+
+  return totalGasUsed;
+}
+
+export async function addTallyResult(
+  QVMACI: QVMACI,
+  recipientTreeDepth: number,
+  tallyData: any,
+  index: number,
+) {
+  let totalGasUsed = 0;
+  const { tally } = tallyData.results;
+
+  const spentVoiceCreditsHash = hashLeftRight(
+    BigInt(tallyData.totalSpentVoiceCredits.spent),
+    BigInt(tallyData.totalSpentVoiceCredits.salt),
+  );
+
+  const perVOSpentVoiceCreditsHash = genTallyResultCommitment(
+    tallyData.perVOSpentVoiceCredits.tally.map((x: string) => BigInt(x)),
+    BigInt(tallyData.perVOSpentVoiceCredits.salt),
+    recipientTreeDepth,
+  );
+
+  const newResultCommitment = genTallyResultCommitment(
+    tally.map((x: string) => BigInt(x)),
+    BigInt(tallyData.results.salt),
+    recipientTreeDepth,
+  );
+
+  const newTallyCommitment = hash3([
+    newResultCommitment,
+    spentVoiceCreditsHash,
+    perVOSpentVoiceCreditsHash,
+  ]);
+
+  if ("0x" + newTallyCommitment.toString(16) !== tallyData.newTallyCommitment) {
+    console.error(
+      "Error: the newTallyCommitment is invalid.",
+      "0x" + newTallyCommitment.toString(16),
+      tallyData.newTallyCommitment,
     );
   }
 
@@ -337,7 +451,7 @@ export async function addTallyResult(
     proof.proof,
     BigInt(tallyData.results.salt),
     spentVoiceCreditsHash,
-    BigInt(perVOSpentVoiceCreditsHash)
+    BigInt(perVOSpentVoiceCreditsHash),
   );
   await receipt.wait();
 }
