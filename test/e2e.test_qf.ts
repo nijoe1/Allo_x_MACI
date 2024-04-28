@@ -187,6 +187,12 @@ describe("e2e", function test() {
     // When submitting to the same vote index, the last vote weight will be the final vote weight
     // When voting weight is 5 that means that the circouts will calculate the square of the weight so 5^2 = 25
     // BUt the final vote weight will be 5
+
+    const remainder = bnSqrt(
+      TOTAL_VOTES1 -
+        bnSqrt((TOTAL_VOTES1 * 1n) / 3n) ** 2n +
+        bnSqrt((TOTAL_VOTES1 * 2n) / 3n) ** 2n
+    )
     await publishBatch({
       messages: [
         {
@@ -208,6 +214,14 @@ describe("e2e", function test() {
       privateKey: keypair.privKey.serialize(),
       signer: allocator,
     });
+
+    console.log(
+      bnSqrt(
+        TOTAL_VOTES1 -
+          bnSqrt((TOTAL_VOTES1 * 1n) / 3n) ** 2n +
+          bnSqrt((TOTAL_VOTES1 * 2n) / 3n) ** 2n
+      )
+    );
 
     await publishBatch({
       messages: [

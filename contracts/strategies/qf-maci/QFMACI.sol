@@ -15,7 +15,7 @@ import { Tally } from "maci-contracts/contracts/Tally.sol";
 import { Poll } from "maci-contracts/contracts/Poll.sol";
 
 // Core Contracts
-import { IAllo } from "./interfaces/Constants.sol";
+import { IAllo, IERC20 } from "./interfaces/Constants.sol";
 
 import { QFMACIBase } from "./QFMACIBase.sol";
 
@@ -39,7 +39,7 @@ contract QFMACI is QFMACIBase, DomainObjs, Params {
     /// ======================
     /// ======= Structs ======
     /// ======================
-    
+
     struct MaciParams {
         address coordinator;
         PubKey coordinatorPubKey;
@@ -284,11 +284,19 @@ contract QFMACI is QFMACIBase, DomainObjs, Params {
         (PubKey memory pubKey, uint256 amount) = abi.decode(_data, (PubKey, uint256));
 
         if (isAddressZero(_maci)) revert MaciNotSet();
+
         if (isFinalized) revert RoundAlreadyFinalized();
 
-        // TODO - add non native token contribution
-        if (msg.value != amount) revert InvalidAmount();
+        address token = allo.getPool(poolId).token;
+
+        if(token != NATIVE) {
+            IERC20(token).transferFrom(_sender, address(this), amount);
+        }else{
+            if (msg.value != amount) revert InvalidAmount();
+        }
+
         if (contributorCredits[_sender] != 0) revert AlreadyContributed();
+
         if (amount > MAX_VOICE_CREDITS * voiceCreditFactor) revert ContributionAmountTooLarge();
 
         uint256 voiceCredits = amount / voiceCreditFactor;
@@ -302,7 +310,7 @@ contract QFMACI is QFMACIBase, DomainObjs, Params {
 
         ClonableMACI(_maci).signUp(pubKey, signUpGatekeeperData, initialVoiceCreditProxyData);
 
-        emit Allocated(address(0), amount, address(0), _sender);
+        emit Allocated(address(0), amount, token, _sender);
     }
 
 
@@ -323,6 +331,7 @@ contract QFMACI is QFMACIBase, DomainObjs, Params {
         uint256 _spentVoiceCreditsHash,
         uint256 _perVOSpentVoiceCreditsHash
     ) internal {
+
         (Poll poll, Tally tally) = getMaciContracts();
 
         (, , , uint8 voteOptionTreeDepth) = poll.treeDepths();

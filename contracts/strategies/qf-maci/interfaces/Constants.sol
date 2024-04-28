@@ -12,7 +12,11 @@ import { IStrategy } from "../../../core/interfaces/IStrategy.sol";
 // Internal Libraries
 import { Metadata } from "../../../core/libraries/Metadata.sol";
 
+// External Libraries
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 contract Constants {
+
     uint256 public constant TREE_ARITY = 5;
 
     /// ======================

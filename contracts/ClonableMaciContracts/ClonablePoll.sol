@@ -7,7 +7,6 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { EmptyBallotRoots } from "maci-contracts/contracts/trees/EmptyBallotRoots.sol";
 import { IPoll } from "maci-contracts/contracts/interfaces/IPoll.sol";
 import { Utilities } from "maci-contracts/contracts/utilities/Utilities.sol";
 import { AccQueueQuinaryMaci } from "maci-contracts/contracts/trees/AccQueueQuinaryMaci.sol";
@@ -19,6 +18,7 @@ import { AccQueue } from "maci-contracts/contracts/trees/AccQueue.sol";
 /// @dev Do not deploy this directly. Use PollFactory.deploy() which performs some
 /// checks on the Poll constructor arguments.
 contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPoll {
+    
     uint256[5] public emptyBallotRoots;
   
     using SafeERC20 for ERC20;
@@ -102,11 +102,8 @@ contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPo
         __Context_init_unchained();
         __Ownable_init_unchained();
         
-        emptyBallotRoots[0] = uint256(4904028317433377177773123885584230878115556059208431880161186712332781831975);
-        emptyBallotRoots[1] = uint256(344732312350052944041104345325295111408747975338908491763817872057138864163);
-        emptyBallotRoots[2] = uint256(19445814455012978799483892811950396383084183210860279923207176682490489907069);
-        emptyBallotRoots[3] = uint256(10621810780690303482827422143389858049829670222244900617652404672125492013328);
-        emptyBallotRoots[4] = uint256(17077690379337026179438044602068085690662043464643511544329656140997390498741);
+        // set the emptyBallotRoots
+        _setEmptyBallotRoots();
         // check that the coordinator public key is valid
         if (_coordinatorPubKey.x >= SNARK_SCALAR_FIELD || _coordinatorPubKey.y >= SNARK_SCALAR_FIELD) {
             revert MaciPubKeyLargerThanSnarkFieldSize();
@@ -295,5 +292,13 @@ contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPo
     function numSignUpsAndMessages() public view returns (uint256 numSUps, uint256 numMsgs) {
         numSUps = numSignups;
         numMsgs = numMessages;
+    }
+
+    function _setEmptyBallotRoots() internal {
+        emptyBallotRoots[0] = uint256(4904028317433377177773123885584230878115556059208431880161186712332781831975);
+        emptyBallotRoots[1] = uint256(344732312350052944041104345325295111408747975338908491763817872057138864163);
+        emptyBallotRoots[2] = uint256(19445814455012978799483892811950396383084183210860279923207176682490489907069);
+        emptyBallotRoots[3] = uint256(10621810780690303482827422143389858049829670222244900617652404672125492013328);
+        emptyBallotRoots[4] = uint256(17077690379337026179438044602068085690662043464643511544329656140997390498741);
     }
 }
