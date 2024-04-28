@@ -15,7 +15,9 @@ import { Tally } from "maci-contracts/contracts/Tally.sol";
 import { Poll } from "maci-contracts/contracts/Poll.sol";
 
 // Core Contracts
-import { QVMACIBase } from "./QVMACIBase.sol";
+import { QFMACIBase } from "./QFMACIBase.sol";
+
+import { IAllo } from "./interfaces/Constants.sol";
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -32,7 +34,7 @@ import { QVMACIBase } from "./QVMACIBase.sol";
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠙⠋⠛⠙⠋⠛⠙⠋⠛⠙⠋⠃⠀⠀⠀⠀⠀⠀⠀⠀⠠⠿⠻⠟⠿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⠟⠿⠟⠿⠆⠀⠸⠿⠿⠟⠯⠀⠀⠀⠸⠿⠿⠿⠏⠀⠀⠀⠀⠀⠈⠉⠻⠻⡿⣿⢿⡿⡿⠿⠛⠁⠀⠀⠀⠀⠀⠀
 //                    allo.gitcoin.co
 
-contract QVMACI is QVMACIBase, DomainObjs, Params {
+contract QFMACI is QFMACIBase, DomainObjs, Params {
     /// ======================
     /// ======= Storage ======
     /// ======================
@@ -49,8 +51,6 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
 
     string public tallyHash;
 
-    uint256 public totalTallyResults;
-
     struct MaciParams {
         address coordinator;
         PubKey coordinatorPubKey;
@@ -63,9 +63,13 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
         MaciParams maciParams;
     }
 
-    struct VoteParams {
-        Message[] messages;
-        PubKey[] pubKeys;
+    struct claimFunds {
+        uint256 voteOptionIndex;
+        uint256 spent;
+        uint256[][] spentProof;
+        uint256 spentSalt;
+        uint256 resultsCommitment;
+        uint256 spentVoiceCreditsCommitment;
     }
 
     /// ================================
@@ -83,7 +87,7 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
     /// ========== Constructor =============
     /// ====================================
 
-    constructor(address _allo, string memory _name, address _maciFactory) QVMACIBase(_allo, _name) {
+    constructor(address _allo, string memory _name, address _maciFactory) QFMACIBase(_allo, _name) {
         maciFactory = _maciFactory;
     }
 
@@ -98,7 +102,7 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
     function initialize(uint256 _poolId, bytes memory _data) external virtual override onlyAllo {
         InitializeParamsMACI memory _initializeParams = abi.decode(_data, (InitializeParamsMACI));
 
-        __QVMACIStrategy_init(_poolId, _initializeParams);
+        __QFMACIStrategy_init(_poolId, _initializeParams);
 
         emit Initialized(_poolId, _data);
     }
@@ -106,7 +110,7 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
     /// @notice Internal initialize function
     /// @param _poolId The ID of the pool
     /// @param _params The initialize params for the strategy
-    function __QVMACIStrategy_init(uint256 _poolId, InitializeParamsMACI memory _params) internal {
+    function __QFMACIStrategy_init(uint256 _poolId, InitializeParamsMACI memory _params) internal {
         __QVBaseStrategy_init(_poolId, _params.initializeParams);
 
         address strategy = address(allo.getPool(_poolId).strategy);
@@ -141,31 +145,18 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
     /// ================================
 
     /**
-     * @dev Signup to this funding round.
-     * @param pubKey Contributor"s public key.
-     */
-    function signup(PubKey calldata pubKey) external {
-        if (isAddressZero(_maci)) revert MaciNotSet();
-        if (isFinalized) revert RoundAlreadyFinalized();
-
-        bytes memory signUpGatekeeperData = abi.encode(msg.sender, maxVoiceCreditsPerAllocator);
-        bytes memory initialVoiceCreditProxyData = abi.encode(msg.sender);
-
-        ClonableMACI(_maci).signUp(pubKey, signUpGatekeeperData, initialVoiceCreditProxyData);
-    }
-
-    /**
      * @dev Register user for voting.
      * This function is part of SignUpGatekeeper interface.
      * @param _data Encoded address of a contributor.
      */
-    function register(address /* _caller */, bytes memory _data) public view {
+    function register(address /* _caller */, bytes memory _data) external view {
         if (msg.sender != _maci) {
             revert OnlyMaciCanRegisterVoters();
         }
 
         address user = abi.decode(_data, (address));
-        bool verified = _isValidAllocator(user);
+
+        bool verified = contributorCredits[user] > 0;
 
         if (!verified) {
             revert UserNotVerified();
@@ -186,98 +177,6 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
 
         tallyHash = _tallyHash;
         emit TallyPublished(_tallyHash);
-    }
-
-    /**
-     * @dev Get the total amount of votes from MACI,
-     * verify the total amount of spent voice credits across all recipients,
-     * calculate the quadratic alpha value,
-     * and allow recipients to claim funds.
-     * @param _totalSpent Total amount of spent voice credits.
-     * @param _totalSpentSalt The salt.
-     */
-    function finalize(
-        uint256 _totalSpent,
-        uint256 _totalSpentSalt,
-        uint256 _newResultCommitment,
-        uint256 _perVOSpentVoiceCreditsHash
-    ) external onlyPoolManager(msg.sender) onlyAfterAllocation {
-        (, Tally tally) = getMaciContracts();
-
-        if (isFinalized) {
-            revert RoundAlreadyFinalized();
-        }
-
-        if (isAddressZero(_maci)) revert MaciNotSet();
-
-        if (!tally.isTallied()) {
-            revert VotesNotTallied();
-        }
-        if (bytes(tallyHash).length == 0) {
-            revert TallyHashNotPublished();
-        } 
-
-        // If nobody voted, the round should be cancelled to avoid locking of matching funds
-        if (_totalSpent == 0) {
-            revert NoVotes();
-        }
-
-        bool verified = tally.verifySpentVoiceCredits(
-            _totalSpent,
-            _totalSpentSalt,
-            _newResultCommitment,
-            _perVOSpentVoiceCreditsHash
-        );
-
-        if (!verified) {
-            revert IncorrectSpentVoiceCredits();
-        }
-
-        // totalRecipientVotes = _totalSpent;
-
-        isFinalized = true;
-    }
-
-    /**
-     * @dev Add and verify tally votes and calculate sum of tally squares for alpha calculation.
-     * @param _voteOptionIndex Vote option index.
-     * @param _tallyResult The results of vote tally for the recipients.
-     * @param _tallyResultProof Proofs of correctness of the vote tally results.
-     * @param _tallyResultSalt the respective salt in the results object in the tally.json
-     * @param _spentVoiceCreditsHash hashLeftRight(number of spent voice credits, spent salt)
-     * @param _perVOSpentVoiceCreditsHash hashLeftRight(merkle root of the no spent voice credits per vote option, perVOSpentVoiceCredits salt)
-     */
-    function _addTallyResult(
-        uint256 _voteOptionIndex,
-        uint256 _tallyResult,
-        uint256[][] memory _tallyResultProof,
-        uint256 _tallyResultSalt,
-        uint256 _spentVoiceCreditsHash,
-        uint256 _perVOSpentVoiceCreditsHash
-    ) public {
-        (Poll poll, Tally tally) = getMaciContracts();
-
-        (, , , uint8 voteOptionTreeDepth) = poll.treeDepths();
-
-        bool resultVerified = tally.verifyTallyResult(
-            _voteOptionIndex,
-            _tallyResult,
-            _tallyResultProof,
-            _tallyResultSalt,
-            voteOptionTreeDepth,
-            _spentVoiceCreditsHash,
-            _perVOSpentVoiceCreditsHash
-        );
-
-        if (!resultVerified) {
-            revert IncorrectTallyResult();
-        }
-
-        _tallyRecipientVotes(_voteOptionIndex, _tallyResult);
-
-        totalTallyResults++;
-
-        emit TallyResultsAdded(_voteOptionIndex, _tallyResult);
     }
 
     /**
@@ -312,6 +211,219 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
             );
         }
     }
+
+    /**
+     * @dev Get the total amount of votes from MACI,
+     * verify the total amount of spent voice credits across all recipients,
+     * calculate the quadratic alpha value,
+     * and allow recipients to claim funds.
+     * @param _totalSpent Total amount of spent voice credits.
+     * @param _totalSpentSalt The salt.
+     */
+    function finalize(
+        uint256 _totalSpent,
+        uint256 _totalSpentSalt,
+        uint256 _newResultCommitment,
+        uint256 _perVOSpentVoiceCreditsHash
+    ) external onlyPoolManager(msg.sender) onlyAfterAllocation {
+        (, Tally tally) = getMaciContracts();
+
+        if (isFinalized) {
+            revert RoundAlreadyFinalized();
+        }
+
+        if (isAddressZero(_maci)) revert MaciNotSet();
+
+        if (!tally.isTallied()) {
+            revert VotesNotTallied();
+        }
+        
+        if (bytes(tallyHash).length == 0) {
+            revert TallyHashNotPublished();
+        } 
+
+        // If nobody voted, the round should be cancelled to avoid locking of matching funds
+        if (_totalSpent == 0) {
+            revert NoVotes();
+        }
+
+        bool verified = tally.verifySpentVoiceCredits(
+            _totalSpent,
+            _totalSpentSalt,
+            _newResultCommitment,
+            _perVOSpentVoiceCreditsHash
+        );
+
+        if (!verified) {
+            revert IncorrectSpentVoiceCredits();
+        }
+
+        // Total amount of spent voice credits is the size of the pool of direct rewards.
+        // Everything else, including unspent voice credits and downscaling error,
+        // is considered a part of the matching pool
+        alpha = calcAlpha(poolAmount, totalVotesSquares, _totalSpent);
+
+        isFinalized = true;
+    }
+
+    /// ====================================
+    /// ============ Internal ==============
+    /// ====================================
+
+    /// @notice Allocate votes to a recipient
+    /// @param _data The data
+    /// @param _sender The sender of the transaction
+    /// @dev Only the pool manager(s) can call this function
+    function _allocate(bytes memory _data, address _sender) internal override {
+
+        (PubKey memory pubKey, uint256 amount) = abi.decode(_data, (PubKey, uint256));
+
+        if (isAddressZero(_maci)) revert MaciNotSet();
+        if (isFinalized) revert RoundAlreadyFinalized();
+
+        // TODO - add non native token contribution
+        if (msg.value != amount) revert InvalidAmount();
+        if (contributorCredits[_sender] != 0) revert AlreadyContributed();
+        if (amount > MAX_VOICE_CREDITS * voiceCreditFactor) revert ContributionAmountTooLarge();
+
+        uint256 voiceCredits = amount / voiceCreditFactor;
+
+        contributorCredits[_sender] = voiceCredits;
+
+        poolAmount += amount;
+
+        bytes memory signUpGatekeeperData = abi.encode(_sender, voiceCredits);
+        bytes memory initialVoiceCreditProxyData = abi.encode(_sender);
+
+        ClonableMACI(_maci).signUp(pubKey, signUpGatekeeperData, initialVoiceCreditProxyData);
+
+        emit Allocated(address(0), amount, address(0), _sender);
+    }
+
+
+    /**
+     * @dev Add and verify tally votes and calculate sum of tally squares for alpha calculation.
+     * @param _voteOptionIndex Vote option index.
+     * @param _tallyResult The results of vote tally for the recipients.
+     * @param _tallyResultProof Proofs of correctness of the vote tally results.
+     * @param _tallyResultSalt the respective salt in the results object in the tally.json
+     * @param _spentVoiceCreditsHash hashLeftRight(number of spent voice credits, spent salt)
+     * @param _perVOSpentVoiceCreditsHash hashLeftRight(merkle root of the no spent voice credits per vote option, perVOSpentVoiceCredits salt)
+     */
+    function _addTallyResult(
+        uint256 _voteOptionIndex,
+        uint256 _tallyResult,
+        uint256[][] memory _tallyResultProof,
+        uint256 _tallyResultSalt,
+        uint256 _spentVoiceCreditsHash,
+        uint256 _perVOSpentVoiceCreditsHash
+    ) internal {
+        (Poll poll, Tally tally) = getMaciContracts();
+
+        (, , , uint8 voteOptionTreeDepth) = poll.treeDepths();
+
+        bool resultVerified = tally.verifyTallyResult(
+            _voteOptionIndex,
+            _tallyResult,
+            _tallyResultProof,
+            _tallyResultSalt,
+            voteOptionTreeDepth,
+            _spentVoiceCreditsHash,
+            _perVOSpentVoiceCreditsHash
+        );
+
+        if (!resultVerified) {
+            revert IncorrectTallyResult();
+        }
+
+        totalRecipientVotes += _tallyResult;
+
+        totalVotesSquares = totalVotesSquares + (_tallyResult * _tallyResult);
+
+        _tallyRecipientVotes(_voteOptionIndex, _tallyResult);
+
+        emit TallyResultsAdded(_voteOptionIndex, _tallyResult);
+    }
+
+    /// @notice _tallyRecipientVotes votes to a recipient
+    /// @param _voteOptionIndex The vote option index
+    /// @param _voiceCreditsToAllocate The voice credits to allocate
+    /// @dev Only the pool manager(s) can call this function
+    function _tallyRecipientVotes(uint256 _voteOptionIndex, uint256 _voiceCreditsToAllocate) internal {
+        address recipientId = recipientIndexToAddress[_voteOptionIndex];
+
+        // spin up the structs in storage for updating
+        Recipient storage recipient = recipients[recipientId];
+
+        if (recipient.tallyVerified) {
+            return;
+        }
+
+        recipient.tallyVerified = true;
+
+        // check that the recipient is accepted
+        if (!_isAcceptedRecipient(recipientId))  return;
+
+        // check the `_voiceCreditsToAllocate` is > 0
+        if (_voiceCreditsToAllocate == 0)  return;
+
+        recipient.totalVotesReceived = _voiceCreditsToAllocate;
+
+        // emit the event with the vote results
+        emit TallyResultsAdded(_voteOptionIndex, _voiceCreditsToAllocate);
+    }
+
+
+    // TODO are we going to allow anyone to distribute the funds? or only the pool manager?
+    /// @notice Distribute the tokens to the recipients
+    /// @dev The "_sender" must be a pool manager and the allocation must have ended
+    function _distribute(
+        address[] memory /* _recipientIds */,
+        bytes memory data,
+        address /* _sender */
+    ) internal override onlyAfterAllocation {
+
+        if(!isFinalized) {
+            revert INVALID();
+        }
+
+        (bytes[] memory claims) = abi.decode(data, (bytes[]));
+
+        for (uint256 i = 0; i < claims.length; i++) {
+            _distributeFunds(claims[i]);
+        }        
+
+        if (!distributionStarted) {
+            distributionStarted = true;
+        }
+    }
+
+    /// @notice Distribute the funds to the recipients
+    /// @param _claim The claim funds
+    function _distributeFunds(bytes memory _claim) internal {
+
+        (claimFunds memory claim) = abi.decode(_claim, (claimFunds));
+
+        address recipientId = recipientIndexToAddress[claim.voteOptionIndex];
+
+        Recipient memory recipient = recipients[recipientId];
+            
+        uint256 amount = getAllocatedAmount(recipient.totalVotesReceived, claim.spent);
+
+        verifyClaim(claim);
+            
+        if (paidOut[recipientId] || !_isAcceptedRecipient(recipientId) || amount == 0) {
+            revert RECIPIENT_ERROR(recipientId);
+        }
+
+        IAllo.Pool memory pool = allo.getPool(poolId);
+
+        _transferAmount(pool.token, recipientId, amount);
+
+        paidOut[recipientId] = true;
+
+        emit Distributed(recipientId, recipient.recipientAddress, amount, address(0));
+    }
     
 
     /// =========================
@@ -328,60 +440,30 @@ contract QVMACI is QVMACIBase, DomainObjs, Params {
         return (Poll(_pollContracts.poll), Tally(_pollContracts.tally));
     }
 
-    /// @notice Allocate votes to a recipient
-    /// @param _data The data
-    /// @param _sender The sender of the transaction
-    /// @dev Only the pool manager(s) can call this function
-    function _allocate(bytes memory _data, address _sender) internal override {
-        (Poll poll, ) = getMaciContracts();
+    /**
+        * @dev Claim allocated tokens.
+        * @param __claimFunds Vote option index.
+    */
+    function verifyClaim(
+        claimFunds memory __claimFunds
+    )internal view {
+        
+        (Poll poll, Tally tally) = getMaciContracts();
+        
+        (, , , uint8 voteOptionTreeDepth) = poll.treeDepths();
 
-        VoteParams memory voteParams = abi.decode(_data, (VoteParams));
+        bool verified = tally.verifyPerVOSpentVoiceCredits(
+            __claimFunds.voteOptionIndex,
+            __claimFunds.spent,
+            __claimFunds.spentProof,
+            __claimFunds.spentSalt,
+            voteOptionTreeDepth,
+            __claimFunds.spentVoiceCreditsCommitment,
+            __claimFunds.resultsCommitment
+        );
 
-        if (voteParams.messages.length != voteParams.pubKeys.length) {
-            revert INVALID();
+        if (!verified) {
+            revert IncorrectPerVOSpentVoiceCredits();
         }
-
-        // TODO - If we allow donation through the allocation, we need to update the function to handle it and return before the Private allocation starts
-
-        poll.publishMessageBatch(voteParams.messages, voteParams.pubKeys);
-
-        emit Allocated(address(0), voteParams.messages.length, _sender);
-    }
-
-    /// @notice _tallyRecipientVotes votes to a recipient
-    /// @param _voteOptionIndex The vote option index
-    /// @param _voiceCreditsToAllocate The voice credits to allocate
-    /// @dev Only the pool manager(s) can call this function
-    function _tallyRecipientVotes(uint256 _voteOptionIndex, uint256 _voiceCreditsToAllocate) internal {
-        address recipientId = recipientIndexToAddress[_voteOptionIndex];
-
-        // spin up the structs in storage for updating
-        Recipient storage recipient = recipients[recipientId];
-
-        if (recipient.tallyVerified) {
-            return;
-            // revert VoteResultsAlreadyVerified();
-        }
-
-        recipient.tallyVerified = true;
-
-        // check that the recipient is accepted
-        if (!_isAcceptedRecipient(recipientId))  return;
-        // revert RECIPIENT_ERROR(recipientId);
-
-        // check the `_voiceCreditsToAllocate` is > 0
-        if (_voiceCreditsToAllocate == 0)  return;
-        // revert INVALID();
-
-        // determine actual votes cast
-        uint256 voteResult = _sqrt(_voiceCreditsToAllocate * _voiceCreditsToAllocate * 1e18);
-
-        // update the values
-        totalRecipientVotes += voteResult;
-
-        recipient.totalVotesReceived = voteResult;
-
-        // emit the event with the vote results
-        emit Allocated(recipientId, voteResult, coordinator);
     }
 }

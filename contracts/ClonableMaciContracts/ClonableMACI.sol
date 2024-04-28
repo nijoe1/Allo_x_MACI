@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.19;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -200,6 +200,7 @@ contract ClonableMACI is IMACI, Params, Utilities, Initializable, OwnableUpgrade
         uint256 timestamp = block.timestamp;
         // Create a state leaf and enqueue it.
         uint256 stateLeaf = hashStateLeaf(StateLeaf(_pubKey, voiceCreditBalance, timestamp));
+        
         uint256 stateIndex = stateAq.enqueue(stateLeaf);
 
         emit SignUp(stateIndex, _pubKey.x, _pubKey.y, voiceCreditBalance, timestamp);

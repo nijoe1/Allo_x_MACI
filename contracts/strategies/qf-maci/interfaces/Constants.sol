@@ -32,6 +32,9 @@ contract Constants {
     error IncorrectTallyResult();
     error IncorrectPerVOSpentVoiceCredits();
     error VoteResultsAlreadyVerified();
+    error InvalidAmount();
+    error AlreadyContributed();
+    error ContributionAmountTooLarge();
 
     /// ======================
     /// ======= Events ======
@@ -102,20 +105,4 @@ contract Constants {
         uint64 allocationEndTime,
         address sender
     );
-
-    /// @notice Emitted when a recipient receives votes
-    /// @param recipientId ID of the recipient
-    /// @param votes The votes allocated to the recipient
-    /// @param allocator The allocator assigning the votes
-    event Allocated(address indexed recipientId, uint256 votes, address allocator);
-
-    /// @notice Emitted when an allocator is added
-    /// @param allocator The allocator address
-    /// @param sender The sender of the transaction
-    event AllocatorAdded(address indexed allocator, address sender);
-
-    /// @notice Emitted when an allocator is removed
-    /// @param allocator The allocator address
-    /// @param sender The sender of the transaction
-    event AllocatorRemoved(address indexed allocator, address sender);
 }

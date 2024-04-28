@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.19;
+pragma solidity 0.8.19;
 
 // External Libraries
 import { Constants, Metadata, IRegistry, IAllo } from "./interfaces/Constants.sol";
@@ -27,7 +27,7 @@ import { BaseStrategy } from "../BaseStrategy.sol";
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠙⠋⠛⠙⠋⠛⠙⠋⠛⠙⠋⠃⠀⠀⠀⠀⠀⠀⠀⠀⠠⠿⠻⠟⠿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⠟⠿⠟⠿⠆⠀⠸⠿⠿⠟⠯⠀⠀⠀⠸⠿⠿⠿⠏⠀⠀⠀⠀⠀⠈⠉⠻⠻⡿⣿⢿⡿⡿⠿⠛⠁⠀⠀⠀⠀⠀⠀
 //                    allo.gitcoin.co
 
-abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
+abstract contract QFMACIBase is BaseStrategy, Multicall, Constants {
     /// ======================
     /// ======= Storage ======
     /// ======================
@@ -59,33 +59,31 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
     /// @notice Whether the distribution started or not
     bool public distributionStarted;
 
-    /// @notice The maximum voice credits per allocator
-    uint256 public maxVoiceCreditsPerAllocator;
-
-    /// @notice The details of the allowed allocator
-    /// @dev allocator => bool
-    mapping(address => bool) public allowedAllocators;
-
     /// @notice The registry contract
     IRegistry private _registry;
 
+
+    // Constants
+    uint256 public constant MAX_VOICE_CREDITS = 10 ** 9;  // MACI allows 2 ** 32 voice credits max
+    uint256 public constant MAX_CONTRIBUTION_AMOUNT = 10 ** 4;  // In tokens
+    uint256 public constant ALPHA_PRECISION = 10 ** 18; // to account for loss of precision in division
+
+    /// @notice The details of the total credits per Contributor "allocator"
+    /// @dev address => uint256
+    mapping(address => uint256) public contributorCredits;
+
     Counters.Counter private _recipientCounter;
+
+    uint256 public voiceCreditFactor;
+
+    uint256 public totalVotesSquares;
 
     /// @notice The status of pool true after Coordinator has finalized the pool
     // By submitting the final tally ZK proof verified by the Tally contract
     bool public isFinalized;
 
-
-    // slots [4...n]
-    /// @notice The status of the recipient for this strategy only
-    /// @dev There is a core `IStrategy.RecipientStatus` that this should map to
-    enum InternalRecipientStatus {
-        None,
-        Pending,
-        Accepted,
-        Rejected,
-        Appealed
-    }
+    // The alpha used in quadratic funding formula
+    uint256 public alpha;
 
     /// @notice The parameters used to initialize the strategy
     struct InitializeParams {
@@ -99,8 +97,6 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
         uint64 registrationEndTime;
         uint64 allocationStartTime;
         uint64 allocationEndTime;
-        // slot 3
-        uint256 maxVoiceCreditsPerAllocator;
     }
 
     /// @notice The details of the recipient
@@ -117,14 +113,6 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
         uint256 applicationId;
     }
 
-    /// @notice The details of the recipient are returned using their ID
-    /// @dev recipientId => Recipient
-    mapping(address => Recipient) public recipients;
-
-    /// @notice Returns whether or not the recipient has been paid out using their ID
-    /// @dev recipientId => paid out
-    mapping(address => bool) public paidOut;
-
     // recipientId -> applicationId -> status -> count
     mapping(address => mapping(uint256 => mapping(Status => uint256))) public reviewsByStatus;
 
@@ -136,6 +124,14 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
 
     // mapping of recipientId to index in recipientIds array
     mapping(address => uint256) public recipientIdToIndex;
+
+    /// @notice The details of the recipient are returned using their ID
+    /// @dev recipientId => Recipient
+    mapping(address => Recipient) public recipients;
+
+    /// @notice Returns whether or not the recipient has been paid out using their ID
+    /// @dev recipientId => paid out
+    mapping(address => bool) public paidOut;
 
     /// ================================
     /// ========== Modifier ============
@@ -166,7 +162,8 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
     /// ========== Constructor =============
     /// ====================================
 
-    constructor(address _allo, string memory _name) BaseStrategy(_allo, _name) {}
+    constructor(address _allo, string memory _name) BaseStrategy(_allo, _name) {
+    }
 
     /// ====================================
     /// =========== Initialize =============
@@ -182,6 +179,8 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
         _registry = allo.getRegistry();
 
         reviewThreshold = _params.reviewThreshold;
+        voiceCreditFactor = (MAX_CONTRIBUTION_AMOUNT * uint256(10) ** 18) / MAX_VOICE_CREDITS;
+        voiceCreditFactor = voiceCreditFactor > 0 ? voiceCreditFactor : 1;
 
         _updatePoolTimestamps(
             _params.registrationStartTime,
@@ -189,77 +188,11 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
             _params.allocationStartTime,
             _params.allocationEndTime
         );
-
-        maxVoiceCreditsPerAllocator = _params.maxVoiceCreditsPerAllocator;
     }
 
     /// ================================
     /// ====== External/Public =========
     /// ================================
-
-    /// =========================
-    /// ==== View Functions =====
-    /// =========================
-
-    /// @notice Get recipient status
-    /// @param _recipientId Id of the recipient
-    function _getRecipientStatus(address _recipientId) internal view override returns (Status) {
-        return recipients[_recipientId].recipientStatus;
-    }
-
-    /// @notice Checks if a pool is active or not
-    /// @return Whether the pool is active or not
-    function _isPoolActive() internal view override returns (bool) {
-        if (registrationStartTime <= block.timestamp && block.timestamp <= registrationEndTime) {
-            return true;
-        }
-        return false;
-    }
-
-    /// @notice Add allocator
-    /// @dev Only the pool manager(s) can call this function and emits an `AllocatorAdded` event
-    /// @param _allocator The allocator address
-    function addAllocator(address _allocator) external onlyPoolManager(msg.sender) {
-        allowedAllocators[_allocator] = true;
-
-        emit AllocatorAdded(_allocator, msg.sender);
-    }
-
-    /// @notice Remove allocator
-    /// @dev Only the pool manager(s) can call this function and emits an `AllocatorRemoved` event
-    /// @param _allocator The allocator address
-    function removeAllocator(address _allocator) external onlyPoolManager(msg.sender) {
-        allowedAllocators[_allocator] = false;
-
-        emit AllocatorRemoved(_allocator, msg.sender);
-    }
-
-    /// @notice Returns if the recipient is accepted
-    /// @param _recipientId The recipient id
-    /// @return true if the recipient is accepted
-    function _isAcceptedRecipient(address _recipientId) internal view returns (bool) {
-        return recipients[_recipientId].recipientStatus == Status.Accepted;
-    }
-
-    /// @notice Checks if the allocator is valid
-    /// @param _allocator The allocator address
-    /// @return true if the allocator is valid
-    function _isValidAllocator(address _allocator) internal view override returns (bool) {
-        return allowedAllocators[_allocator];
-    }
-
-    /**
-     * @dev Get the amount of voice credits for a given address.
-     * This function is a part of the InitialVoiceCreditProxy interface.
-     * @param _data Encoded address of a user.
-     */
-    function getVoiceCredits(address /* _caller */, bytes memory _data) public view returns (uint256) {
-        address user = abi.decode(_data, (address));
-        if (!_isValidAllocator(user)) {
-            return 0;
-        }
-        return maxVoiceCreditsPerAllocator;
-    }
 
     /// @notice Review recipient(s) application(s)
     /// @dev You can review multiple recipients at once or just one. This can only be called by a pool manager and
@@ -300,7 +233,7 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
             if (reviewsByStatus[recipientId][applicationId][recipientStatus] >= reviewThreshold) {
                 recipient.recipientStatus = recipientStatus;
 
-                // Changes for QVMACIStrategy
+                // Changes for QFMACIStrategy
                 if (recipientStatus == Status.Accepted) {
                     // Adding the recipient to the registry so that we have a voting option on MACI
                     addRecipient(recipientId);
@@ -331,31 +264,12 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
         _transferAmount(_token, msg.sender, amount);
     }
 
+    /// @notice Contract should be able to receive NATIVE
+    receive() external payable {}
+
     /// ====================================
     /// ============ Internal ==============
     /// ====================================
-
-    /// @notice Check if the registration is active
-    /// @dev Reverts if the registration is not active
-    function _checkOnlyActiveRegistration() internal view {
-        if (registrationStartTime > block.timestamp || block.timestamp > registrationEndTime) {
-            revert REGISTRATION_NOT_ACTIVE();
-        }
-    }
-
-    /// @notice Check if the allocation has ended
-    /// @dev Reverts if the allocation has not ended
-    function _checkOnlyAfterAllocation() internal view {
-        if (block.timestamp <= allocationEndTime) revert ALLOCATION_NOT_ENDED();
-    }
-
-    /// @notice Checks if the allocation has not ended and reverts if it has.
-    /// @dev This will revert if the allocation has ended.
-    function _checkOnlyBeforeAllocationEnds() internal view {
-        if (block.timestamp > allocationEndTime) {
-            revert ALLOCATION_NOT_ACTIVE();
-        }
-    }
 
     /// @notice Set the start and end dates for the pool
     /// @param _registrationStartTime The start time for the registration
@@ -463,51 +377,99 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
         }
     }
 
-    // TODO are we going to allow anyone to distribute the funds? or only the pool manager?
-    /// @notice Distribute the tokens to the recipients
-    /// @dev The "_sender" must be a pool manager and the allocation must have ended
-    /// @param _recipientIds The recipient ids
-    /// @param _sender The sender of the transaction
-    function _distribute(
-        address[] memory _recipientIds,
-        bytes memory,
-        address _sender
-    ) internal override onlyPoolManager(_sender) onlyAfterAllocation {
+    /// @notice Add a recipient to the MACI contract
+    /// @param _recipientId The ID of the recipient
+    function addRecipient(address _recipientId) internal {
+        _recipientCounter.increment();
+        uint256 recipientIndex = _recipientCounter.current();
+        recipientIdToIndex[_recipientId] = recipientIndex;
+        recipientIndexToAddress[recipientIndex] = _recipientId;
+        emit RecipientVotingOptionAdded(_recipientId, recipientIndex);
+    }
 
-        if(!isFinalized) {
+    /// =========================
+    /// ==== View Functions =====
+    /// =========================
+
+    /// @notice Get the total number of recipients
+    /// @return The total number of recipients
+    function getRecipientCount() external view returns (uint256) {
+        return _recipientCounter.current();
+    }
+
+    /// @notice Get recipient status
+    /// @param _recipientId Id of the recipient
+    function _getRecipientStatus(address _recipientId) internal view override returns (Status) {
+        return recipients[_recipientId].recipientStatus;
+    }
+
+    /// @notice Checks if a pool is active or not
+    /// @return Whether the pool is active or not
+    function _isPoolActive() internal view override returns (bool) {
+        if (registrationStartTime <= block.timestamp && block.timestamp <= registrationEndTime) {
+            return true;
+        }
+        return false;
+    }
+
+
+    /// @notice Returns if the recipient is accepted
+    /// @param _recipientId The recipient id
+    /// @return true if the recipient is accepted
+    function _isAcceptedRecipient(address _recipientId) internal view returns (bool) {
+        return recipients[_recipientId].recipientStatus == Status.Accepted;
+    }
+
+    /// @notice Checks if the allocator is valid
+    /// @param _allocator The allocator address
+    /// @return true if the allocator is valid
+    function _isValidAllocator(address _allocator) internal view override returns (bool) {
+        return contributorCredits[_allocator] > 0;
+    }
+
+    /// @notice Check if the registration is active
+    /// @dev Reverts if the registration is not active
+    function _checkOnlyActiveRegistration() internal view {
+        if (registrationStartTime > block.timestamp || block.timestamp > registrationEndTime) {
+            revert REGISTRATION_NOT_ACTIVE();
+        }
+    }
+
+    /// @notice Check if the allocation has ended
+    /// @dev Reverts if the allocation has not ended
+    function _checkOnlyAfterAllocation() internal view {
+        if (block.timestamp <= allocationEndTime) revert ALLOCATION_NOT_ENDED();
+    }
+
+    /// @notice Checks if the allocation has not ended and reverts if it has.
+    /// @dev This will revert if the allocation has ended.
+    function _checkOnlyBeforeAllocationEnds() internal view {
+        if (block.timestamp > allocationEndTime) {
+            revert ALLOCATION_NOT_ACTIVE();
+        }
+    }
+
+    /// @notice Get the payout for a single recipient
+    /// @param _recipientId The ID of the recipient
+    /// @return _payoutSummary payout as a "PayoutSummary" struct
+    function _getPayout(address _recipientId, bytes memory data) internal view override returns (PayoutSummary memory _payoutSummary) {}
+
+    /**
+     * @dev Get the amount of voice credits for a given address.
+     * This function is a part of the InitialVoiceCreditProxy interface.
+     * @param _data Encoded address of a user.
+     */
+    function getVoiceCredits(address /* _caller */, bytes memory _data) external view returns (uint256) {
+        address _allocator = abi.decode(_data, (address));
+        if (!_isValidAllocator(_allocator)) {
+            return 0;
+        }
+        return contributorCredits[_allocator];
+    }
+
+    function _beforeIncreasePoolAmount(uint256) internal view override {
+        if (distributionStarted) {
             revert INVALID();
-        }
-
-        uint256 payoutLength = _recipientIds.length;
-
-        uint256[] memory payouts = new uint256[](payoutLength);
-
-        for (uint256 i; i < payoutLength; ) {
-            address recipientId = _recipientIds[i];
-            Recipient storage recipient = recipients[recipientId];
-
-            PayoutSummary memory payout = _getPayout(recipientId, "");
-            uint256 amount = payout.amount;
-
-            payouts[i] = amount;
-
-            if (paidOut[recipientId] || !_isAcceptedRecipient(recipientId) || amount == 0) {
-                revert RECIPIENT_ERROR(recipientId);
-            }
-
-            IAllo.Pool memory pool = allo.getPool(poolId);
-            _transferAmount(pool.token, recipient.recipientAddress, amount);
-
-            paidOut[recipientId] = true;
-
-            emit Distributed(recipientId, recipient.recipientAddress, amount, _sender);
-            unchecked {
-                ++i;
-            }
-        }
-
-        if (!distributionStarted) {
-            distributionStarted = true;
         }
     }
 
@@ -520,56 +482,63 @@ abstract contract QVMACIBase is BaseStrategy, Multicall, Constants {
         return _registry.isOwnerOrMemberOfProfile(profile.id, _sender);
     }
 
+
     /// ====================================
     /// ============ QV Helper ==============
     /// ====================================
 
-    /// @notice Calculate the square root of a number (Babylonian method)
-    /// @param x The number
-    /// @return y The square root
-    function _sqrt(uint256 x) internal pure returns (uint256 y) {
-        uint256 z = (x + 1) / 2;
-        y = x;
-        while (z < y) {
-            y = z;
-            z = (x / z + z) / 2;
+    /**
+        * @dev Calculate the alpha for the capital constrained quadratic formula
+        *  in page 17 of https://arxiv.org/pdf/1809.06421.pdf
+        * @param _budget Total budget of the round to be distributed
+        * @param _totalVotesSquares Total of the squares of votes
+        * @param _totalSpent Total amount of spent voice credits
+    */
+    function calcAlpha(
+        uint256 _budget,
+        uint256 _totalVotesSquares,
+        uint256 _totalSpent
+    )
+        internal
+        view
+        returns (uint256 _alpha)
+    {
+        // make sure budget = contributions + matching pool
+        uint256 contributions = _totalSpent * voiceCreditFactor;
+
+        if (_budget < contributions) {
+        revert ("InvalidBudget");
         }
-    }
 
-    /// @notice Add a recipient to the MACI contract
-    /// @param _recipientId The ID of the recipient
-    function addRecipient(address _recipientId) internal {
-        _recipientCounter.increment();
-        uint256 recipientIndex = _recipientCounter.current();
-        recipientIdToIndex[_recipientId] = recipientIndex;
-        recipientIndexToAddress[recipientIndex] = _recipientId;
-        emit RecipientVotingOptionAdded(_recipientId, recipientIndex);
-    }
-
-    /// @notice Get the payout for a single recipient
-    /// @param _recipientId The ID of the recipient
-    /// @return The payout as a "PayoutSummary" struct
-    function _getPayout(address _recipientId, bytes memory) internal view override returns (PayoutSummary memory) {
-        Recipient memory recipient = recipients[_recipientId];
-
-        // Calculate the payout amount based on the percentage of total votes
-        uint256 amount;
-        if (!paidOut[_recipientId] && totalRecipientVotes != 0) {
-            amount = (poolAmount * recipient.totalVotesReceived) / totalRecipientVotes;
+        // guard against division by zero.
+        // This happens when no project receives more than one vote
+        if (_totalVotesSquares <= _totalSpent) {
+        revert("NoProjectHasMoreThanOneVote");
         }
-        return PayoutSummary(recipient.recipientAddress, amount);
+
+        return  (_budget - contributions) * ALPHA_PRECISION /
+                (voiceCreditFactor * (_totalVotesSquares - _totalSpent));
+
     }
 
-    function _beforeIncreasePoolAmount(uint256) internal view override {
-        if (distributionStarted) {
-            revert INVALID();
-        }
+    /**
+        * @dev Get allocated token amount (without verification).
+        * @param _tallyResult The result of vote tally for the recipient.
+        * @param _spent The amount of voice credits spent on the recipient.
+    */
+    function getAllocatedAmount(
+        uint256 _tallyResult,
+        uint256 _spent
+    )
+        internal
+        view
+        returns (uint256)
+    {
+        // amount = ( alpha * (quadratic votes)^2 + (precision - alpha) * totalSpent ) / precision
+        uint256 quadratic = alpha * voiceCreditFactor * _tallyResult * _tallyResult;
+        uint256 totalSpentCredits = voiceCreditFactor * _spent;
+        uint256 linearPrecision = ALPHA_PRECISION * totalSpentCredits;
+        uint256 linearAlpha = alpha * totalSpentCredits;
+        return ((quadratic + linearPrecision) - linearAlpha) / ALPHA_PRECISION;
     }
-
-    function getRecipientCount() external view returns (uint256) {
-        return _recipientCounter.current();
-    }
-
-    /// @notice Contract should be able to receive NATIVE
-    receive() external payable {}
 }

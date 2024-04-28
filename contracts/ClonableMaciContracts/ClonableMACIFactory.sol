@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts-upgradeable/proxy/ClonesUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -16,17 +16,15 @@ import { TopupCredit } from "maci-contracts/contracts/TopupCredit.sol";
 import { DomainObjs } from "maci-contracts/contracts/utilities/DomainObjs.sol";
 
 contract ClonableMACIFactory is OwnableUpgradeable {
-    uint8 internal constant STATE_TREE_SUBDEPTH = 2;
 
-    uint256 public constant TREE_ARITY = 5;
+    struct MACI_SETTINGS {
+        Params.TreeDepths treeDepths;
+        uint8 stateTreeDepth;
+        address verifier;
+        address vkRegistry;
+    }
 
-    uint8 public stateTreeDepth;
-
-    Params.TreeDepths public treeDepths;
-
-    address public verifier;
-
-    address public vkRegistry;
+    mapping(uint8 => MACI_SETTINGS) public maciSettings;
 
     // The clonable strategy to use for the pools
     address internal clonableMaciImplementation;
@@ -41,10 +39,6 @@ contract ClonableMACIFactory is OwnableUpgradeable {
 
     /// @notice constructor function which ensure deployer is set as owner
     function initialize(
-        uint8 _stateTreeDepth,
-        Params.TreeDepths memory _treeDepths,
-        address _verifier,
-        address _vkRegistry,
         address _clonableMaciImplementation,
         address _PollImplementation,
         address _TallyImplementation,
@@ -53,30 +47,35 @@ contract ClonableMACIFactory is OwnableUpgradeable {
         __Context_init_unchained();
         __Ownable_init_unchained();
 
-        stateTreeDepth = _stateTreeDepth;
-        treeDepths = _treeDepths;
-        verifier = _verifier;
-        vkRegistry = _vkRegistry;
         clonableMaciImplementation = _clonableMaciImplementation;
         PollImplementation = _PollImplementation;
         TallyImplementation = _TallyImplementation;
         MessageProcessorImplementation = _MessageProcessorImplementation;
     }
 
+    function setMaciSettings(
+        uint8 _maciId,
+        MACI_SETTINGS memory _maciSettings
+    ) external onlyOwner {
+        maciSettings[_maciId] = _maciSettings;
+    }
+
     function createMACI(
         address _signUpGatekeeper,
         address _initialVoiceCreditProxy,
         address _topupCredit,
-        address _coordinator
+        address _coordinator,
+        uint8 _maciId
     ) external returns (address _cloneMaci) {
         _cloneMaci = ClonesUpgradeable.cloneDeterministic(clonableMaciImplementation, bytes32(deployNonce++));
 
+        MACI_SETTINGS memory _maciSettings = maciSettings[_maciId];
         ClonableMACI(_cloneMaci).initialize(
             address(this),
-            stateTreeDepth,
-            treeDepths,
-            verifier,
-            vkRegistry,
+            _maciSettings.stateTreeDepth,
+            _maciSettings.treeDepths,
+            _maciSettings.verifier,
+            _maciSettings.vkRegistry,
             _signUpGatekeeper,
             _initialVoiceCreditProxy,
             _topupCredit,

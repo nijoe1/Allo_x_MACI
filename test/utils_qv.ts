@@ -231,24 +231,19 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
 
   const __ClonableMACIFactory = await upgrades.deployProxy(
     _ClonableMACIFactory,
-    [
-      deployParams.stateTreeDepth,
-      deployParams.treeDepths,
-      verifierContractAddress,
-      vkRegistryContractAddress,
-      ClonableMACIAddress,
-      pollAddr,
-      tallyAddr,
-      mpAddr,
-    ],
+    [ClonableMACIAddress, pollAddr, tallyAddr, mpAddr],
   );
 
   const ClonableMACIFactoryAddress = await __ClonableMACIFactory.getAddress();
 
-  console.log(
-    "ClonableMACIFactoryAddress deployed at : ",
-    ClonableMACIFactoryAddress,
-  );
+  const setMaciParameters = await __ClonableMACIFactory.setMaciSettings(0, [
+    deployParams.treeDepths,
+    deployParams.stateTreeDepth,
+    verifierContractAddress,
+    vkRegistryContractAddress,
+  ]);
+
+  const setMaciParametersReceipt = await setMaciParameters.wait();
 
   await vkRegistryContract.setVerifyingKeys(
     deployParams.stateTreeDepth,
@@ -332,7 +327,7 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     // AllocationEndTime
     BigInt(time + BigInt(500)),
     // MaxVoiceCreditsPerAllocator
-    BigInt(10000),
+    BigInt(150),
   ];
 
   let CoordinatorKeypair = new Keypair();
@@ -346,12 +341,13 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
       CoordinatorKeypair.pubKey.asContractParam().y,
     ],
     ClonableMACIFactoryAddress,
+    0,
   ];
 
   let initStruct = [initializeParams, MaciParams];
 
   let types = [
-    "((bool,bool,uint256,uint256,uint256,uint256,uint256,uint256),(address,(uint256,uint256),address))",
+    "((bool,bool,uint256,uint256,uint256,uint256,uint256,uint256),(address,(uint256,uint256),address,uint8))",
   ];
 
   let AbiCoder = new ethers.AbiCoder();
