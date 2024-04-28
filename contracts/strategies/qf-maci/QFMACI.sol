@@ -15,9 +15,9 @@ import { Tally } from "maci-contracts/contracts/Tally.sol";
 import { Poll } from "maci-contracts/contracts/Poll.sol";
 
 // Core Contracts
-import { QFMACIBase } from "./QFMACIBase.sol";
-
 import { IAllo } from "./interfaces/Constants.sol";
+
+import { QFMACIBase } from "./QFMACIBase.sol";
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -35,22 +35,11 @@ import { IAllo } from "./interfaces/Constants.sol";
 //                    allo.gitcoin.co
 
 contract QFMACI is QFMACIBase, DomainObjs, Params {
+
     /// ======================
-    /// ======= Storage ======
+    /// ======= Structs ======
     /// ======================
-
-    address public maciFactory;
-
-    address public _maci;
-
-    ClonableMACI.PollContracts public _pollContracts;
-
-    address public coordinator; // coordinator address
-
-    PubKey public coordinatorPubKey; // coordinator public key
-
-    string public tallyHash;
-
+    
     struct MaciParams {
         address coordinator;
         PubKey coordinatorPubKey;
@@ -71,6 +60,22 @@ contract QFMACI is QFMACIBase, DomainObjs, Params {
         uint256 resultsCommitment;
         uint256 spentVoiceCreditsCommitment;
     }
+
+    /// ======================
+    /// ======= Storage ======
+    /// ======================
+
+    ClonableMACI.PollContracts public _pollContracts;
+
+    PubKey public coordinatorPubKey; // coordinator public key
+
+    address public coordinator; // coordinator address
+
+    address public maciFactory;
+
+    string public tallyHash;
+
+    address public _maci;
 
     /// ================================
     /// ========== Modifier ============
