@@ -75,11 +75,23 @@ describe("e2e", function test() {
 
   const VoiceCreditsFactor = 10000000000000n;
 
-  const TOTAL_VOTES1 = (CONTRIBUTION_AMOUNT1 * 4n) / 10n / VoiceCreditsFactor;
+  const analogyOfContributedAmountToSingleVoteFromCLR = 4n / 10n;
 
-  const TOTAL_VOTES2 = (CONTRIBUTION_AMOUNT2 * 4n) / 10n / VoiceCreditsFactor;
+  const TOTAL_VOTES1 =
+    (CONTRIBUTION_AMOUNT1 / VoiceCreditsFactor) *
+    analogyOfContributedAmountToSingleVoteFromCLR;
+
+  const TOTAL_VOTES2 =
+    (CONTRIBUTION_AMOUNT2 / VoiceCreditsFactor) *
+    analogyOfContributedAmountToSingleVoteFromCLR;
 
   const random = Math.floor(Math.random() * 10 ** 8);
+
+  let recipientAddress1;
+  let recipientAddress2;
+  let outputDir;
+  let maciAddress;
+  let types;
 
   before(async () => {
     [Coordinator] = await ethers.getSigners();
@@ -98,8 +110,16 @@ describe("e2e", function test() {
     maciTransactionHash = contracts.maciTransitionHash || "";
     coordinatorKeypair = contracts.CoordinatorKeypair;
 
-    const types = ["(uint256,uint256)", "uint256"];
+    recipientAddress1 = await recipient1.getAddress();
+    recipientAddress2 = await recipient2.getAddress();
+    maciAddress = await maciContract.getAddress();
 
+    outputDir = path.join(proofOutputDirectory, `${random}`);
+
+    types = ["(uint256,uint256)", "uint256"];
+  });
+
+  it("Should allow the contribution to gain tokens", async () => {
     const contributeData1 = [
       [keypair.pubKey.asContractParam().x, keypair.pubKey.asContractParam().y],
       CONTRIBUTION_AMOUNT1,
@@ -114,75 +134,75 @@ describe("e2e", function test() {
 
     const contributeEncodedData1 = AbiCoder.defaultAbiCoder().encode(
       types,
-      contributeData1,
+      contributeData1
     );
 
     // signup2
     const SignUpTx1 = await AlloContract.connect(allocator).allocate(
       1,
       contributeEncodedData1,
-      { value: CONTRIBUTION_AMOUNT1 },
+      { value: CONTRIBUTION_AMOUNT1 }
     );
     await SignUpTx1.wait();
 
     const contributeEncodedData2 = AbiCoder.defaultAbiCoder().encode(
       types,
-      contributeData2,
+      contributeData2
     );
 
     // signup2
     const SignUpTx2 = await AlloContract.connect(recipient1).allocate(
       1,
       contributeEncodedData2,
-      { value: CONTRIBUTION_AMOUNT2 },
+      { value: CONTRIBUTION_AMOUNT2 }
     );
     await SignUpTx2.wait();
+  });
 
+  it("Should Register Recipients and Review them", async () => {
     // Register recipients
-    let recipientAddress1 = await recipient1.getAddress();
     let data = AbiCoder.defaultAbiCoder().encode(
       ["address", "address", "(uint256,string)"],
-      [recipientAddress1, ZeroAddress, [1n, "Project 1"]],
+      [recipientAddress1, ZeroAddress, [1n, "Project 1"]]
     );
 
     const RecipientRegistrationTx = await AlloContract.connect(
-      recipient1,
+      recipient1
     ).registerRecipient(1n, data);
     await RecipientRegistrationTx.wait();
 
-    let recipientAddress2 = await recipient2.getAddress();
     data = AbiCoder.defaultAbiCoder().encode(
       ["address", "address", "(uint256,string)"],
-      [recipientAddress2, ZeroAddress, [1n, "Project 2"]],
+      [recipientAddress2, ZeroAddress, [1n, "Project 2"]]
     );
 
     const RecipientRegistrationTx2 = await AlloContract.connect(
-      recipient2,
+      recipient2
     ).registerRecipient(1n, data);
     await RecipientRegistrationTx2.wait();
 
     // Review Acccept recipient
     let status = 2; // Accepted
     const ReviewRecipientsTx = await QFMACIStrategy.connect(
-      Coordinator,
+      Coordinator
     ).reviewRecipients(
       [recipientAddress1, recipientAddress2],
-      [status, status],
+      [status, status]
     );
     await ReviewRecipientsTx.wait();
+  });
 
+  it("Should allow the Contributors to vote", async () => {
     // create 1 vote message for the recipient1
     const votingOption1 =
       await QFMACIStrategy.connect(Coordinator).recipientIdToIndex(
-        recipientAddress1,
+        recipientAddress1
       );
-
-    const maciAddress = await maciContract.getAddress();
 
     // create 1 vote message for the recipient1
     const votingOption2 =
       await QFMACIStrategy.connect(Coordinator).recipientIdToIndex(
-        recipientAddress2,
+        recipientAddress2
       );
     // When submitting to the same vote index, the last vote weight will be the final vote weight
     // When voting weight is 5 that means that the circouts will calculate the square of the weight so 5^2 = 25
@@ -190,9 +210,11 @@ describe("e2e", function test() {
 
     const remainder = bnSqrt(
       TOTAL_VOTES1 -
-        bnSqrt((TOTAL_VOTES1 * 1n) / 3n) ** 2n +
-        bnSqrt((TOTAL_VOTES1 * 2n) / 3n) ** 2n
-    )
+        bnSqrt(TOTAL_VOTES1 * 33n) ** 2n +
+        bnSqrt(TOTAL_VOTES1 * 67n) ** 2n
+    );
+
+    console.log("Remainder :  ", remainder);
     await publishBatch({
       messages: [
         {
@@ -215,14 +237,6 @@ describe("e2e", function test() {
       signer: allocator,
     });
 
-    console.log(
-      bnSqrt(
-        TOTAL_VOTES1 -
-          bnSqrt((TOTAL_VOTES1 * 1n) / 3n) ** 2n +
-          bnSqrt((TOTAL_VOTES1 * 2n) / 3n) ** 2n
-      )
-    );
-
     await publishBatch({
       messages: [
         {
@@ -230,14 +244,14 @@ describe("e2e", function test() {
           voteOptionIndex: votingOption1,
           nonce: 1n,
           // Casting the one third of the total votes
-          newVoteWeight: bnSqrt((TOTAL_VOTES2 * 1n) / 3n),
+          newVoteWeight: bnSqrt((TOTAL_VOTES2 * 1n) / 5n),
         },
         {
           stateIndex: 2n,
           voteOptionIndex: votingOption2,
           nonce: 2n,
           // Casting the two third of the total votes
-          newVoteWeight: bnSqrt((TOTAL_VOTES2 * 2n) / 3n),
+          newVoteWeight: bnSqrt((TOTAL_VOTES2 * 4n) / 5n),
         },
       ],
       pollId: 0n,
@@ -248,7 +262,9 @@ describe("e2e", function test() {
     });
 
     await timeTravel(Coordinator.provider as unknown as EthereumProvider, 700);
+  });
 
+  it("Should Merge MACI Subtrees", async () => {
     await mergeMaciSubtrees({
       maciAddress,
       pollId: 0n,
@@ -256,12 +272,9 @@ describe("e2e", function test() {
       signer: Coordinator,
       quiet: true,
     });
+  });
 
-    const outputDir = path.join(proofOutputDirectory, `${random}`);
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
-
+  it("Should Generate Proofs and Submit to MACI Contract", async () => {
     const tallyFile = getTalyFilePath(outputDir);
 
     const {
@@ -315,6 +328,12 @@ describe("e2e", function test() {
     });
 
     console.log("finished proveOnChain");
+  });
+  it("Should Publish Tally Hash", async () => {
+    if (!existsSync(outputDir)) {
+      mkdirSync(outputDir, { recursive: true });
+    }
+    const tallyFile = getTalyFilePath(outputDir);
 
     const tally = JSONFile.read(tallyFile) as any;
     const tallyHash = await getIpfsHash(tally);
@@ -325,6 +344,15 @@ describe("e2e", function test() {
     await publishTallyHashReceipt.wait();
 
     console.log("Tally hash", tallyHash);
+  });
+
+  it("Should Add Tally Results in Batches", async () => {
+    if (!existsSync(outputDir)) {
+      mkdirSync(outputDir, { recursive: true });
+    }
+    const tallyFile = getTalyFilePath(outputDir);
+
+    const tally = JSONFile.read(tallyFile) as any;
 
     // add tally results to funding round
     const recipientTreeDepth = voteOptionTreeDepth;
@@ -335,7 +363,7 @@ describe("e2e", function test() {
       QFMACIStrategy.connect(Coordinator) as QFMACI,
       recipientTreeDepth,
       tally,
-      tallyBatchSize,
+      tallyBatchSize
     );
 
     console.log("Finished adding tally results");
@@ -352,8 +380,9 @@ describe("e2e", function test() {
   });
 
   it("Should Finalize the Round", async () => {
-    const outputDir = path.join(proofOutputDirectory, `${random}`);
-
+    if (!existsSync(outputDir)) {
+      mkdirSync(outputDir, { recursive: true });
+    }
     const tallyFile = getTalyFilePath(outputDir);
 
     const tally = JSONFile.read(tallyFile) as any;
@@ -363,18 +392,18 @@ describe("e2e", function test() {
     const newResultCommitment = genTallyResultCommitment(
       tally.results.tally.map((x: string) => BigInt(x)),
       BigInt(tally.results.salt),
-      recipientTreeDepth,
+      recipientTreeDepth
     );
 
     const perVOSpentVoiceCreditsCommitment = genTallyResultCommitment(
       tally.perVOSpentVoiceCredits.tally.map((x: string) => BigInt(x)),
       BigInt(tally.perVOSpentVoiceCredits.salt),
-      recipientTreeDepth,
+      recipientTreeDepth
     );
 
     console.log(
       "Tally total spent voice credits",
-      tally.totalSpentVoiceCredits.spent,
+      tally.totalSpentVoiceCredits.spent
     );
 
     // Finalize round
@@ -382,7 +411,7 @@ describe("e2e", function test() {
       tally.totalSpentVoiceCredits.spent,
       tally.totalSpentVoiceCredits.salt,
       newResultCommitment.toString(),
-      perVOSpentVoiceCreditsCommitment.toString(),
+      perVOSpentVoiceCreditsCommitment.toString()
     );
 
     await finalize.wait();
@@ -392,11 +421,6 @@ describe("e2e", function test() {
   });
 
   it("Should Distribute Founds", async () => {
-    const outputDir = path.join(proofOutputDirectory, `${random}`);
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
-
     const tallyFile = getTalyFilePath(outputDir);
 
     const tally = JSONFile.read(tallyFile) as any;
@@ -404,23 +428,23 @@ describe("e2e", function test() {
     const recipientTreeDepth = voteOptionTreeDepth;
 
     const recipientIndex1 = await QFMACIStrategy.recipientIdToIndex(
-      await recipient1.getAddress(),
+      await recipient1.getAddress()
     );
 
     const distributeData1 = getRecipientClaimData(
       Number(recipientIndex1),
       recipientTreeDepth,
-      tally,
+      tally
     );
 
     let initStruct = [distributeData1];
 
     const distributeData2 = getRecipientClaimData(
       Number(
-        await QFMACIStrategy.recipientIdToIndex(await recipient2.getAddress()),
+        await QFMACIStrategy.recipientIdToIndex(await recipient2.getAddress())
       ),
       recipientTreeDepth,
-      tally,
+      tally
     );
 
     let types = ["(uint256,uint256,uint256[][],uint256,uint256,uint256)"];
@@ -439,28 +463,28 @@ describe("e2e", function test() {
 
     console.log(
       "Pool Balance Before Distribution is :",
-      await QFMACIStrategy.getPoolAmount(),
+      await QFMACIStrategy.getPoolAmount()
     );
 
     const recipient1Balance = await ethers.provider.getBalance(
-      await recipient1.getAddress(),
+      await recipient1.getAddress()
     );
     const recipient2Balance = await ethers.provider.getBalance(
-      await recipient2.getAddress(),
+      await recipient2.getAddress()
     );
 
     let distributeFunds = await AlloContract.connect(Coordinator).distribute(
       1,
       [],
-      bytesArrayEncoded,
+      bytesArrayEncoded
     );
     await distributeFunds.wait();
 
     const recipient1BalanceAfterDistribution = await ethers.provider.getBalance(
-      await recipient1.getAddress(),
+      await recipient1.getAddress()
     );
     const recipient2BalanceAfterDistribution = await ethers.provider.getBalance(
-      await recipient2.getAddress(),
+      await recipient2.getAddress()
     );
 
     console.log(
@@ -469,7 +493,7 @@ describe("e2e", function test() {
       " & After : ",
       recipient1BalanceAfterDistribution,
       " & Difference: ",
-      Number(recipient1BalanceAfterDistribution - recipient1Balance) / 10 ** 18,
+      Number(recipient1BalanceAfterDistribution - recipient1Balance) / 10 ** 18
     );
     console.log(
       "Recipient 2 balance before Distribution: ",
@@ -477,19 +501,19 @@ describe("e2e", function test() {
       " & After : ",
       recipient2BalanceAfterDistribution,
       " & Difference: ",
-      Number(recipient2BalanceAfterDistribution - recipient2Balance) / 10 ** 18,
+      Number(recipient2BalanceAfterDistribution - recipient2Balance) / 10 ** 18
     );
 
     expect(recipient1BalanceAfterDistribution).to.be.greaterThan(
-      recipient1Balance,
+      recipient1Balance
     );
     expect(recipient2BalanceAfterDistribution).to.be.greaterThan(
-      recipient2Balance,
+      recipient2Balance
     );
 
     console.log(
       "Pool Balance After Distribution",
-      await ethers.provider.getBalance(await QFMACIStrategy.getAddress()),
+      await ethers.provider.getBalance(await QFMACIStrategy.getAddress())
     );
   });
 });
