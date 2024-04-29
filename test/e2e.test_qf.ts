@@ -69,21 +69,11 @@ describe("e2e", function test() {
 
   const UNIT = 10n ** 18n;
 
-  const CONTRIBUTION_AMOUNT1 = 100n * UNIT;
+  const CONTRIBUTION_AMOUNT1 = 5n * UNIT;
 
-  const CONTRIBUTION_AMOUNT2 = 73n * UNIT;
+  const CONTRIBUTION_AMOUNT2 = 5n * UNIT;
 
-  const VoiceCreditsFactor = 10000000000000n;
-
-  const analogyOfContributedAmountToSingleVoteFromCLR = 4n / 10n;
-
-  const TOTAL_VOTES1 =
-    (CONTRIBUTION_AMOUNT1 / VoiceCreditsFactor) *
-    analogyOfContributedAmountToSingleVoteFromCLR;
-
-  const TOTAL_VOTES2 =
-    (CONTRIBUTION_AMOUNT2 / VoiceCreditsFactor) *
-    analogyOfContributedAmountToSingleVoteFromCLR;
+  const SINGLEVOTE = 10n ** 5n;
 
   const random = Math.floor(Math.random() * 10 ** 8);
 
@@ -115,6 +105,10 @@ describe("e2e", function test() {
     maciAddress = await maciContract.getAddress();
 
     outputDir = path.join(proofOutputDirectory, `${random}`);
+
+    if (!existsSync(outputDir)) {
+      mkdirSync(outputDir, { recursive: true });
+    }
 
     types = ["(uint256,uint256)", "uint256"];
   });
@@ -208,26 +202,19 @@ describe("e2e", function test() {
     // When voting weight is 5 that means that the circouts will calculate the square of the weight so 5^2 = 25
     // BUt the final vote weight will be 5
 
-    const remainder = bnSqrt(
-      TOTAL_VOTES1 -
-        bnSqrt(TOTAL_VOTES1 * 33n) ** 2n +
-        bnSqrt(TOTAL_VOTES1 * 67n) ** 2n
-    );
-
-    console.log("Remainder :  ", remainder);
     await publishBatch({
       messages: [
         {
           stateIndex: 1n,
           voteOptionIndex: votingOption1,
           nonce: 1n,
-          newVoteWeight: bnSqrt((TOTAL_VOTES1 * 1n) / 3n),
+          newVoteWeight: bnSqrt(SINGLEVOTE * 4n),
         },
         {
           stateIndex: 1n,
           voteOptionIndex: votingOption2,
           nonce: 2n,
-          newVoteWeight: bnSqrt((TOTAL_VOTES1 * 2n) / 3n),
+          newVoteWeight: bnSqrt(SINGLEVOTE * 1n),
         },
       ],
       pollId: 0n,
@@ -244,14 +231,14 @@ describe("e2e", function test() {
           voteOptionIndex: votingOption1,
           nonce: 1n,
           // Casting the one third of the total votes
-          newVoteWeight: bnSqrt((TOTAL_VOTES2 * 1n) / 5n),
+          newVoteWeight: bnSqrt(SINGLEVOTE * 4n),
         },
         {
           stateIndex: 2n,
           voteOptionIndex: votingOption2,
           nonce: 2n,
           // Casting the two third of the total votes
-          newVoteWeight: bnSqrt((TOTAL_VOTES2 * 4n) / 5n),
+          newVoteWeight: bnSqrt(SINGLEVOTE * 1n),
         },
       ],
       pollId: 0n,
@@ -330,9 +317,6 @@ describe("e2e", function test() {
     console.log("finished proveOnChain");
   });
   it("Should Publish Tally Hash", async () => {
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
     const tallyFile = getTalyFilePath(outputDir);
 
     const tally = JSONFile.read(tallyFile) as any;
@@ -347,9 +331,6 @@ describe("e2e", function test() {
   });
 
   it("Should Add Tally Results in Batches", async () => {
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
     const tallyFile = getTalyFilePath(outputDir);
 
     const tally = JSONFile.read(tallyFile) as any;
@@ -380,9 +361,6 @@ describe("e2e", function test() {
   });
 
   it("Should Finalize the Round", async () => {
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
     const tallyFile = getTalyFilePath(outputDir);
 
     const tally = JSONFile.read(tallyFile) as any;
