@@ -3,20 +3,19 @@ pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts-upgradeable/proxy/ClonesUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { ClonableMACI } from "./ClonableMACI.sol";
+import {ClonableMACI} from "./ClonableMACI.sol";
 import {AccQueueQuinaryMaci} from "maci-contracts/contracts/trees/AccQueueQuinaryMaci.sol";
-import { ClonablePoll } from "./ClonablePoll.sol";
-import { ClonableTally } from "./ClonableTally.sol";
-import { ClonableMessageProcessor } from "./ClonableMessageProcessor.sol";
+import {ClonablePoll} from "./ClonablePoll.sol";
+import {ClonableTally} from "./ClonableTally.sol";
+import {ClonableMessageProcessor} from "./ClonableMessageProcessor.sol";
 
-import { Params } from "maci-contracts/contracts/utilities/Params.sol";
-import { AccQueue } from "maci-contracts/contracts/trees/AccQueue.sol";
-import { IMACI } from "maci-contracts/contracts/interfaces/IMACI.sol";
-import { TopupCredit } from "maci-contracts/contracts/TopupCredit.sol";
-import { DomainObjs } from "maci-contracts/contracts/utilities/DomainObjs.sol";
+import {Params} from "maci-contracts/contracts/utilities/Params.sol";
+import {AccQueue} from "maci-contracts/contracts/trees/AccQueue.sol";
+import {IMACI} from "maci-contracts/contracts/interfaces/IMACI.sol";
+import {TopupCredit} from "maci-contracts/contracts/TopupCredit.sol";
+import {DomainObjs} from "maci-contracts/contracts/utilities/DomainObjs.sol";
 
 contract ClonableMACIFactory is OwnableUpgradeable {
-
     struct MACI_SETTINGS {
         Params.TreeDepths treeDepths;
         uint8 stateTreeDepth;
@@ -53,21 +52,20 @@ contract ClonableMACIFactory is OwnableUpgradeable {
         MessageProcessorImplementation = _MessageProcessorImplementation;
     }
 
-    function setMaciSettings(
-        uint8 _maciId,
-        MACI_SETTINGS memory _maciSettings
-    ) external onlyOwner {
+    function setMaciSettings(uint8 _maciId, MACI_SETTINGS memory _maciSettings) external onlyOwner {
         maciSettings[_maciId] = _maciSettings;
     }
 
     function createMACI(
         address _signUpGatekeeper,
         address _initialVoiceCreditProxy,
-        address _topupCredit,
         address _coordinator,
         uint8 _maciId
     ) external returns (address _cloneMaci) {
-        _cloneMaci = ClonesUpgradeable.cloneDeterministic(clonableMaciImplementation, bytes32(deployNonce++));
+        _cloneMaci = ClonesUpgradeable.cloneDeterministic(
+            clonableMaciImplementation,
+            bytes32(deployNonce++)
+        );
 
         MACI_SETTINGS memory _maciSettings = maciSettings[_maciId];
         ClonableMACI(_cloneMaci).initialize(
@@ -78,7 +76,6 @@ contract ClonableMACIFactory is OwnableUpgradeable {
             _maciSettings.vkRegistry,
             _signUpGatekeeper,
             _initialVoiceCreditProxy,
-            _topupCredit,
             _coordinator
         );
 
@@ -91,7 +88,6 @@ contract ClonableMACIFactory is OwnableUpgradeable {
     /// @param _treeDepths The depths of the merkle trees
     /// @param _coordinatorPubKey The coordinator's public key
     /// @param _maci The MACI contract interface reference
-    /// @param _topupCredit The TopupCredit contract
     /// @param _pollOwner The owner of the poll
     /// @return pollAddr deployed Poll contract
     function deployPoll(
@@ -100,7 +96,6 @@ contract ClonableMACIFactory is OwnableUpgradeable {
         Params.TreeDepths memory _treeDepths,
         DomainObjs.PubKey memory _coordinatorPubKey,
         address _maci,
-        TopupCredit _topupCredit,
         address _pollOwner
     ) public virtual returns (address pollAddr) {
         /// @notice Validate _maxValues
@@ -117,10 +112,13 @@ contract ClonableMACIFactory is OwnableUpgradeable {
         Params.ExtContracts memory extContracts = Params.ExtContracts({
             maci: IMACI(_maci),
             messageAq: messageAq,
-            topupCredit: _topupCredit
+            topupCredit: TopupCredit(address(0))
         });
 
-        address poll = ClonesUpgradeable.cloneDeterministic(PollImplementation, bytes32(deployNonce++));
+        address poll = ClonesUpgradeable.cloneDeterministic(
+            PollImplementation,
+            bytes32(deployNonce++)
+        );
 
         ClonablePoll _poll = ClonablePoll(poll);
 
@@ -142,7 +140,10 @@ contract ClonableMACIFactory is OwnableUpgradeable {
         address _owner
     ) public returns (address tallyAddr) {
         // deploy Tally for this Poll
-        address tally = ClonesUpgradeable.cloneDeterministic(TallyImplementation, bytes32(deployNonce++));
+        address tally = ClonesUpgradeable.cloneDeterministic(
+            TallyImplementation,
+            bytes32(deployNonce++)
+        );
 
         ClonableTally _tally = ClonableTally(tally);
 

@@ -24,6 +24,7 @@ import {
   ClonablePoll,
   ClonableMessageProcessor,
   ClonableTally,
+  Dai,
 } from "../typechain-types";
 import { EthereumProvider } from "hardhat/types";
 import { create } from "domain";
@@ -60,6 +61,8 @@ export interface ITestContracts {
   poolDeployTime?: number;
   maciTransitionHash: string;
   CoordinatorKeypair: Keypair;
+
+  Dai: Dai;
 }
 
 export const deployAlloContracts = async () => {
@@ -94,14 +97,17 @@ export const deployAlloContracts = async () => {
 
   const daiAddress = await Dai.getAddress();
 
-  // console.log("Dai deployed at : ", daiAddress);
-
+  const VerifierFactory = await ethers.getContractFactory("Groth16Verifier");
+  const Verifier = await upgrades.deployProxy(VerifierFactory, []);
+  const verifierAddress = await Verifier.getAddress();
   return {
     AlloAddress: alloAddress,
     RegistryAddress: registryAddress,
     DaiAddress: daiAddress,
     Allo: Allo as Allo,
     Registry: Registry as Registry,
+    Dai: Dai as Dai,
+    verifierAddress: verifierAddress,
   };
 };
 
@@ -121,9 +127,6 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
 
   const verifierContractAddress = await verifierContract.getAddress();
   const vkRegistryContractAddress = await vkRegistryContract.getAddress();
-
-  // console.log("Verifier deployed at : ", verifierContractAddress);
-  // console.log("VkRegistry deployed at : ", vkRegistryContractAddress);
 
   const {
     PoseidonT3Contract,
@@ -163,9 +166,9 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
         poseidonAddrs.poseidonT5,
         poseidonAddrs.poseidonT6,
         undefined,
-        true,
-      ),
-    ),
+        true
+      )
+    )
   );
 
   const AlloRegistry = AlloContracts.RegistryAddress;
@@ -184,21 +187,21 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     await deployContractWithLinkedLibraries<ClonablePoll>(
       ClonablePollFactory,
       "",
-      true,
+      true
     );
 
   const messageProcessorFactoryContract =
     await deployContractWithLinkedLibraries<ClonableMessageProcessor>(
       ClonableMessageProcessorFactory,
       "",
-      true,
+      true
     );
 
   const tallyFactoryContract =
     await deployContractWithLinkedLibraries<ClonableTally>(
       ClonableTallyFactory,
       "",
-      true,
+      true
     );
 
   const [pollAddr, mpAddr, tallyAddr] = await Promise.all([
@@ -207,31 +210,25 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     tallyFactoryContract.getAddress(),
   ]);
 
-  // console.log("PollFactory deployed at : ", pollAddr);
-  // console.log("MessageProcessorFactory deployed at : ", mpAddr);
-  // console.log("TallyFactory deployed at : ", tallyAddr);
-
   // --------------------------------------------------  Clonable MACI  --------------------------------------------------
 
   const ClonableMACI = await deployContractWithLinkedLibraries<ClonableMACI>(
     ClonableMACIFactory,
     "ClonableMACI",
-    true,
+    true
   );
 
   const ClonableMACIAddress = await ClonableMACI.getAddress();
 
-  // console.log("ClonableMACIAddress deployed at : ", ClonableMACIAddress);
-
   // --------------------------------------------------  Clonable MACI Factory  --------------------------------------------------
 
   const _ClonableMACIFactory = await ethers.getContractFactory(
-    "ClonableMACIFactory",
+    "ClonableMACIFactory"
   );
 
   const __ClonableMACIFactory = await upgrades.deployProxy(
     _ClonableMACIFactory,
-    [ClonableMACIAddress, pollAddr, tallyAddr, mpAddr],
+    [ClonableMACIAddress, pollAddr, tallyAddr, mpAddr]
   );
 
   const ClonableMACIFactoryAddress = await __ClonableMACIFactory.getAddress();
@@ -245,11 +242,6 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
 
   const setMaciParametersReceipt = await setMaciParameters.wait();
 
-  // console.log(
-  //   "ClonableMACIFactoryAddress deployed at : ",
-  //   ClonableMACIFactoryAddress,
-  // );
-
   await vkRegistryContract.setVerifyingKeys(
     deployParams.stateTreeDepth,
     deployParams.treeDepths.intStateTreeDepth,
@@ -257,16 +249,12 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     deployParams.treeDepths.voteOptionTreeDepth,
     deployParams.getMessageBatchSize(),
     deployParams.processVk.asContractParam() as IVerifyingKeyStruct,
-    deployParams.tallyVk.asContractParam() as IVerifyingKeyStruct,
+    deployParams.tallyVk.asContractParam() as IVerifyingKeyStruct
   );
 
   const QFMACIStrategyFactory = await ethers.getContractFactory("QFMACI");
 
-  const QFMACIStrategy = await QFMACIStrategyFactory.deploy(
-    Allo,
-    "QFMACI",
-    ClonableMACIFactoryAddress,
-  );
+  const QFMACIStrategy = await QFMACIStrategyFactory.deploy(Allo, "QFMACI");
 
   const QFMACIStrategyAddress = await QFMACIStrategy.getAddress();
 
@@ -275,7 +263,7 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
   // --------------------------------------------------  Add ClonableMACI to Allo allowed strategies  ----------------------------
 
   const addStrategy = await AlloContracts.Allo.addToCloneableStrategies(
-    QFMACIStrategyAddress,
+    QFMACIStrategyAddress
   );
 
   const addStrategyReceipt = await addStrategy.wait();
@@ -295,7 +283,7 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
       pointer: "test",
     },
     signer.address,
-    [signer.address],
+    [signer.address]
   );
 
   const createProfileReceipt = await createProfile.wait();
@@ -311,7 +299,7 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
 
   const time = BigInt(
     (await ethers.provider.getBlock(await ethers.provider.getBlockNumber()))!
-      .timestamp,
+      .timestamp
   );
 
   // console.log("Time : ", time);
@@ -344,18 +332,33 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
       CoordinatorKeypair.pubKey.asContractParam().y,
     ],
     ClonableMACIFactoryAddress,
+    AlloContracts.verifierAddress,
     0,
+    // VALID_EVENT_IDS
+    [192993346581360151154216832563903227660n],
+    // requiredValidEventIds
+    1n,
+    // maxContributionAmountForZupass
+    10n ** 18n *  100n,
+    // maxContributionAmountForNonZupass
+    10n ** 18n *  100n,
+    // ZUPASS_SIGNER
+    // [
+    //   2658696990997679927259430495938453033612384821046330804164935913637421782846n,
+    //   18852953264765021758165045442761617487242246681540213362114332008455443692095n,
+    // ],
   ];
 
   let initStruct = [initializeParams, MaciParams];
 
   let types = [
-    "((bool,bool,uint256,uint256,uint256,uint256,uint256),(address,(uint256,uint256),address,uint8))",
+    "((bool,bool,uint256,uint256,uint256,uint256,uint256),(address,(uint256,uint256),address,address,uint8,uint256[],uint256,uint256,uint256))",
   ];
 
   let AbiCoder = new ethers.AbiCoder();
 
   let bytes = AbiCoder.encode(types, [initStruct]);
+
 
   // bytes32 _profileId,
   // address _strategy,
@@ -368,14 +371,16 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     profileId,
     QFMACIStrategyAddress,
     bytes,
-    "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-    BigInt(100 * 10 ** 18),
+    // "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+    AlloContracts.DaiAddress,
+    // BigInt(100 * 10 ** 18),
+    0n,
     {
       protocol: 1,
       pointer: "test",
     },
     [signer.address],
-    { value: BigInt(100 * 10 ** 18) },
+    // { value: BigInt(100 * 10 ** 18) }
   );
 
   // console.log(
@@ -410,22 +415,22 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
 
   let maciContract2 = (await ethers.getContractAt(
     "ClonableMACI",
-    maci,
+    maci
   )) as ClonableMACI;
 
   // console.log("MACI deployed at : ", await maciContract2.stateTreeDepth());
 
   const signer2 = new ethers.Wallet(
     PRIVATE_KEY_USER1,
-    ethers.provider,
+    ethers.provider
   ) as Signer;
   const signer3 = new ethers.Wallet(
     PRIVATE_KEY_USER2,
-    ethers.provider,
+    ethers.provider
   ) as Signer;
   const signer4 = new ethers.Wallet(
     PRIVATE_KEY_USER3,
-    ethers.provider,
+    ethers.provider
   ) as Signer;
 
   return {
@@ -435,19 +440,19 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     verifierContract,
     maciContract: (await ethers.getContractAt(
       "ClonableMACI",
-      maci,
+      maci
     )) as ClonableMACI,
     pollContract: (await ethers.getContractAt(
       "ClonablePoll",
-      pollContracts[0],
+      pollContracts[0]
     )) as ClonablePoll,
     messageProcessorContract: (await ethers.getContractAt(
       "ClonableMessageProcessor",
-      pollContracts[1],
+      pollContracts[1]
     )) as ClonableMessageProcessor,
     tallyContract: (await ethers.getContractAt(
       "ClonableTally",
-      pollContracts[2],
+      pollContracts[2]
     )) as ClonableTally,
     user1: signer2,
     user2: signer3,
@@ -456,6 +461,7 @@ export const deployTestContracts = async (): Promise<ITestContracts> => {
     poolDeployTime: deployTime,
     maciTransitionHash: maciTransitionHash || "",
     CoordinatorKeypair: CoordinatorKeypair,
+    Dai: AlloContracts.Dai,
   };
 };
 

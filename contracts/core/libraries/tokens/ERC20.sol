@@ -125,7 +125,10 @@ abstract contract ERC20 {
     }
 
     /// @dev Returns the amount of tokens that `spender` can spend on behalf of `owner`.
-    function allowance(address owner, address spender) public view virtual returns (uint256 result) {
+    function allowance(
+        address owner,
+        address spender
+    ) public view virtual returns (uint256 result) {
         /// @solidity memory-safe-assembly
         assembly {
             mstore(0x20, spender)

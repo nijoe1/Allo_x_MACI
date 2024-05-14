@@ -2,10 +2,10 @@
 pragma solidity 0.8.19;
 
 // Interfaces
-import { IRegistry } from "./IRegistry.sol";
-import { IStrategy } from "./IStrategy.sol";
+import {IRegistry} from "./IRegistry.sol";
+import {IStrategy} from "./IStrategy.sol";
 // Internal Libraries
-import { Metadata } from "../libraries/Metadata.sol";
+import {Metadata} from "../libraries/Metadata.sol";
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -218,7 +218,10 @@ interface IAllo {
 
     /// @notice Registers a recipient and emits {Registered} event if successful and may be handled differently by each strategy.
     /// @param _poolId The ID of the pool to register the recipient for
-    function registerRecipient(uint256 _poolId, bytes memory _data) external payable returns (address);
+    function registerRecipient(
+        uint256 _poolId,
+        bytes memory _data
+    ) external payable returns (address);
 
     /// @notice Registers a batch of recipients.
     /// @param _poolIds The pool ID's to register the recipients for
@@ -250,7 +253,11 @@ interface IAllo {
     /// @param _poolId The ID of the pool to distribute from
     /// @param _recipientIds The recipient ids to distribute to
     /// @param _data The data to pass to the strategy and may be handled differently by each strategy
-    function distribute(uint256 _poolId, address[] memory _recipientIds, bytes memory _data) external;
+    function distribute(
+        uint256 _poolId,
+        address[] memory _recipientIds,
+        bytes memory _data
+    ) external;
 
     /// =========================
     /// ==== View Functions =====

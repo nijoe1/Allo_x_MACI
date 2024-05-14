@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-import { IMACI } from "maci-contracts/contracts/interfaces/IMACI.sol";
-import { Hasher } from "maci-contracts/contracts/crypto/Hasher.sol";
-import { IPoll } from "maci-contracts/contracts/interfaces/IPoll.sol";
-import { IMessageProcessor } from "maci-contracts/contracts/interfaces/IMessageProcessor.sol";
-import { SnarkCommon } from "maci-contracts/contracts/crypto/SnarkCommon.sol";
-import { IVerifier } from "maci-contracts/contracts/interfaces/IVerifier.sol";
-import { IVkRegistry } from "maci-contracts/contracts/interfaces/IVkRegistry.sol";
-import { CommonUtilities } from "maci-contracts/contracts/utilities/CommonUtilities.sol";
+import {IMACI} from "maci-contracts/contracts/interfaces/IMACI.sol";
+import {Hasher} from "maci-contracts/contracts/crypto/Hasher.sol";
+import {IPoll} from "maci-contracts/contracts/interfaces/IPoll.sol";
+import {IMessageProcessor} from "maci-contracts/contracts/interfaces/IMessageProcessor.sol";
+import {SnarkCommon} from "maci-contracts/contracts/crypto/SnarkCommon.sol";
+import {IVerifier} from "maci-contracts/contracts/interfaces/IVerifier.sol";
+import {IVkRegistry} from "maci-contracts/contracts/interfaces/IVkRegistry.sol";
+import {CommonUtilities} from "maci-contracts/contracts/utilities/CommonUtilities.sol";
 
 /// @title Tally
 /// @notice The Tally contract is used during votes tallying
@@ -57,7 +57,12 @@ contract ClonableTally is OwnableUpgradeable, SnarkCommon, CommonUtilities, Hash
     /// @param _vkRegistry The VkRegistry contract
     /// @param _poll The Poll contract
     /// @param _mp The MessageProcessor contract
-    function initialize(address _verifier, address _vkRegistry, address _poll, address _mp) public initializer {
+    function initialize(
+        address _verifier,
+        address _vkRegistry,
+        address _poll,
+        address _mp
+    ) public initializer {
         __Context_init_unchained();
         __Ownable_init_unchained();
         verifier = IVerifier(_verifier);
@@ -105,7 +110,11 @@ contract ClonableTally is OwnableUpgradeable, SnarkCommon, CommonUtilities, Hash
         uint256 _tallyBatchSize,
         uint256 _newTallyCommitment
     ) public view returns (uint256 inputHash) {
-        uint256 packedVals = genTallyVotesPackedVals(_numSignUps, _batchStartIndex, _tallyBatchSize);
+        uint256 packedVals = genTallyVotesPackedVals(
+            _numSignUps,
+            _batchStartIndex,
+            _tallyBatchSize
+        );
         uint256[] memory input = new uint256[](4);
         input[0] = packedVals;
         input[1] = sbCommitment;
@@ -150,7 +159,13 @@ contract ClonableTally is OwnableUpgradeable, SnarkCommon, CommonUtilities, Hash
             revert AllBallotsTallied();
         }
 
-        bool isValid = verifyTallyProof(_proof, numSignUps, batchStartIndex, tallyBatchSize, _newTallyCommitment);
+        bool isValid = verifyTallyProof(
+            _proof,
+            numSignUps,
+            batchStartIndex,
+            tallyBatchSize,
+            _newTallyCommitment
+        );
 
         if (!isValid) {
             revert InvalidTallyVotesProof();
@@ -179,7 +194,11 @@ contract ClonableTally is OwnableUpgradeable, SnarkCommon, CommonUtilities, Hash
         (IMACI maci, , ) = poll.extContracts();
 
         // Get the verifying key
-        VerifyingKey memory vk = vkRegistry.getTallyVk(maci.stateTreeDepth(), intStateTreeDepth, voteOptionTreeDepth);
+        VerifyingKey memory vk = vkRegistry.getTallyVk(
+            maci.stateTreeDepth(),
+            intStateTreeDepth,
+            voteOptionTreeDepth
+        );
 
         // Get the public inputs
         uint256 publicInputHash = genTallyVotesPublicInputHash(
@@ -271,7 +290,12 @@ contract ClonableTally is OwnableUpgradeable, SnarkCommon, CommonUtilities, Hash
         uint256 _spentVoiceCreditsHash,
         uint256 _resultCommitment
     ) public view returns (bool isValid) {
-        uint256 computedRoot = computeMerkleRootFromPath(_voteOptionTreeDepth, _voteOptionIndex, _spent, _spentProof);
+        uint256 computedRoot = computeMerkleRootFromPath(
+            _voteOptionTreeDepth,
+            _voteOptionIndex,
+            _spent,
+            _spentProof
+        );
 
         uint256[3] memory tally;
         tally[0] = _resultCommitment;

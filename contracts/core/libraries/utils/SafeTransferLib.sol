@@ -141,7 +141,11 @@ library SafeTransferLib {
     ///
     /// Note: Does NOT revert upon failure.
     /// Returns whether the transfer of ETH is successful instead.
-    function trySafeTransferETH(address to, uint256 amount, uint256 gasStipend) internal returns (bool success) {
+    function trySafeTransferETH(
+        address to,
+        uint256 amount,
+        uint256 gasStipend
+    ) internal returns (bool success) {
         /// @solidity memory-safe-assembly
         assembly {
             // Transfer the ETH and check if it succeeded or not.
@@ -194,7 +198,11 @@ library SafeTransferLib {
     ///
     /// The `from` account must have their entire balance approved for
     /// the current contract to manage.
-    function safeTransferAllFrom(address token, address from, address to) internal returns (uint256 amount) {
+    function safeTransferAllFrom(
+        address token,
+        address from,
+        address to
+    ) internal returns (uint256 amount) {
         /// @solidity memory-safe-assembly
         assembly {
             let m := mload(0x40) // Cache the free memory pointer.
@@ -372,7 +380,10 @@ library SafeTransferLib {
                 mstore(0x34, amount) // Store back the original `amount`.
 
                 if iszero(
-                    and(or(eq(mload(0x00), 1), iszero(returndatasize())), call(gas(), token, 0, 0x10, 0x44, 0x00, 0x20))
+                    and(
+                        or(eq(mload(0x00), 1), iszero(returndatasize())),
+                        call(gas(), token, 0, 0x10, 0x44, 0x00, 0x20)
+                    )
                 ) {
                     // Store the function selector of `ApproveFailed()`.
                     mstore(0x00, 0x3e3f8f73)

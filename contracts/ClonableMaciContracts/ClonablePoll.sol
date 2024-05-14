@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-import { Params } from "maci-contracts/contracts/utilities/Params.sol";
-import { SnarkCommon } from "maci-contracts/contracts/crypto/SnarkCommon.sol";
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { IPoll } from "maci-contracts/contracts/interfaces/IPoll.sol";
-import { Utilities } from "maci-contracts/contracts/utilities/Utilities.sol";
-import { AccQueueQuinaryMaci } from "maci-contracts/contracts/trees/AccQueueQuinaryMaci.sol";
-import { AccQueue } from "maci-contracts/contracts/trees/AccQueue.sol";
+import {Params} from "maci-contracts/contracts/utilities/Params.sol";
+import {SnarkCommon} from "maci-contracts/contracts/crypto/SnarkCommon.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IPoll} from "maci-contracts/contracts/interfaces/IPoll.sol";
+import {Utilities} from "maci-contracts/contracts/utilities/Utilities.sol";
+import {AccQueueQuinaryMaci} from "maci-contracts/contracts/trees/AccQueueQuinaryMaci.sol";
+import {AccQueue} from "maci-contracts/contracts/trees/AccQueue.sol";
 
 /// @title Poll
 /// @notice A Poll contract allows voters to submit encrypted messages
@@ -18,9 +18,8 @@ import { AccQueue } from "maci-contracts/contracts/trees/AccQueue.sol";
 /// @dev Do not deploy this directly. Use PollFactory.deploy() which performs some
 /// checks on the Poll constructor arguments.
 contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPoll {
-    
     uint256[5] public emptyBallotRoots;
-  
+
     using SafeERC20 for ERC20;
 
     /// @notice Whether the Poll has been initialized
@@ -101,11 +100,13 @@ contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPo
     ) public initializer {
         __Context_init_unchained();
         __Ownable_init_unchained();
-        
+
         // set the emptyBallotRoots
         _setEmptyBallotRoots();
         // check that the coordinator public key is valid
-        if (_coordinatorPubKey.x >= SNARK_SCALAR_FIELD || _coordinatorPubKey.y >= SNARK_SCALAR_FIELD) {
+        if (
+            _coordinatorPubKey.x >= SNARK_SCALAR_FIELD || _coordinatorPubKey.y >= SNARK_SCALAR_FIELD
+        ) {
             revert MaciPubKeyLargerThanSnarkFieldSize();
         }
 
@@ -161,7 +162,11 @@ contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPo
         // init messageAq here by inserting placeholderLeaf
         uint256[2] memory dat = [NOTHING_UP_MY_SLEEVE, 0];
 
-        (Message memory _message, PubKey memory _padKey, uint256 placeholderLeaf) = padAndHashMessage(dat, 1);
+        (
+            Message memory _message,
+            PubKey memory _padKey,
+            uint256 placeholderLeaf
+        ) = padAndHashMessage(dat, 1);
         extContracts.messageAq.enqueue(placeholderLeaf);
 
         emit PublishMessage(_message, _padKey);
@@ -189,7 +194,10 @@ contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPo
     }
 
     /// @inheritdoc IPoll
-    function publishMessage(Message memory _message, PubKey calldata _encPubKey) public virtual isWithinVotingDeadline {
+    function publishMessage(
+        Message memory _message,
+        PubKey calldata _encPubKey
+    ) public virtual isWithinVotingDeadline {
         // we check that we do not exceed the max number of messages
         if (numMessages >= maxValues.maxMessages) revert TooManyMessages();
 
@@ -217,7 +225,10 @@ contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPo
     /// @dev Can only be submitted before the voting deadline
     /// @param _messages the messages
     /// @param _encPubKeys the encrypted public keys
-    function publishMessageBatch(Message[] calldata _messages, PubKey[] calldata _encPubKeys) external {
+    function publishMessageBatch(
+        Message[] calldata _messages,
+        PubKey[] calldata _encPubKeys
+    ) external {
         if (_messages.length != _encPubKeys.length) {
             revert InvalidBatchLength();
         }
@@ -234,7 +245,10 @@ contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPo
     }
 
     /// @inheritdoc IPoll
-    function mergeMaciStateAqSubRoots(uint256 _numSrQueueOps, uint256 _pollId) public onlyOwner isAfterVotingDeadline {
+    function mergeMaciStateAqSubRoots(
+        uint256 _numSrQueueOps,
+        uint256 _pollId
+    ) public onlyOwner isAfterVotingDeadline {
         // This function cannot be called after the stateAq was merged
         if (stateAqMerged) revert StateAqAlreadyMerged();
 
@@ -283,7 +297,11 @@ contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPo
     }
 
     /// @inheritdoc IPoll
-    function getDeployTimeAndDuration() public view returns (uint256 pollDeployTime, uint256 pollDuration) {
+    function getDeployTimeAndDuration()
+        public
+        view
+        returns (uint256 pollDeployTime, uint256 pollDuration)
+    {
         pollDeployTime = deployTime;
         pollDuration = duration;
     }
@@ -295,10 +313,20 @@ contract ClonablePoll is Params, Utilities, SnarkCommon, OwnableUpgradeable, IPo
     }
 
     function _setEmptyBallotRoots() internal {
-        emptyBallotRoots[0] = uint256(4904028317433377177773123885584230878115556059208431880161186712332781831975);
-        emptyBallotRoots[1] = uint256(344732312350052944041104345325295111408747975338908491763817872057138864163);
-        emptyBallotRoots[2] = uint256(19445814455012978799483892811950396383084183210860279923207176682490489907069);
-        emptyBallotRoots[3] = uint256(10621810780690303482827422143389858049829670222244900617652404672125492013328);
-        emptyBallotRoots[4] = uint256(17077690379337026179438044602068085690662043464643511544329656140997390498741);
+        emptyBallotRoots[0] = uint256(
+            4904028317433377177773123885584230878115556059208431880161186712332781831975
+        );
+        emptyBallotRoots[1] = uint256(
+            344732312350052944041104345325295111408747975338908491763817872057138864163
+        );
+        emptyBallotRoots[2] = uint256(
+            19445814455012978799483892811950396383084183210860279923207176682490489907069
+        );
+        emptyBallotRoots[3] = uint256(
+            10621810780690303482827422143389858049829670222244900617652404672125492013328
+        );
+        emptyBallotRoots[4] = uint256(
+            17077690379337026179438044602068085690662043464643511544329656140997390498741
+        );
     }
 }

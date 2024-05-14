@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-import { InitialVoiceCreditProxy } from "maci-contracts/contracts/initialVoiceCreditProxy/InitialVoiceCreditProxy.sol";
-import { SignUpGatekeeper } from "maci-contracts/contracts/gatekeepers/SignUpGatekeeper.sol";
-import { AccQueue } from "maci-contracts/contracts/trees/AccQueue.sol";
-import { AccQueueQuinaryBlankSl } from "maci-contracts/contracts/trees/AccQueueQuinaryBlankSl.sol";
-import { IMACI } from "maci-contracts/contracts/interfaces/IMACI.sol";
-import { Params } from "maci-contracts/contracts/utilities/Params.sol";
-import { TopupCredit } from "maci-contracts/contracts/TopupCredit.sol";
-import { Utilities } from "maci-contracts/contracts/utilities/Utilities.sol";
-import { ClonableMACIFactory } from "./ClonableMACIFactory.sol";
+import {InitialVoiceCreditProxy} from "maci-contracts/contracts/initialVoiceCreditProxy/InitialVoiceCreditProxy.sol";
+import {SignUpGatekeeper} from "maci-contracts/contracts/gatekeepers/SignUpGatekeeper.sol";
+import {AccQueue} from "maci-contracts/contracts/trees/AccQueue.sol";
+import {AccQueueQuinaryBlankSl} from "maci-contracts/contracts/trees/AccQueueQuinaryBlankSl.sol";
+import {IMACI} from "maci-contracts/contracts/interfaces/IMACI.sol";
+import {Params} from "maci-contracts/contracts/utilities/Params.sol";
+import {Utilities} from "maci-contracts/contracts/utilities/Utilities.sol";
+import {ClonableMACIFactory} from "./ClonableMACIFactory.sol";
 
 /// @title MACI - Minimum Anti-Collusion Infrastructure Version 1
 /// @notice A contract which allows users to sign up, and deploy new polls
@@ -49,9 +48,6 @@ contract ClonableMACI is IMACI, Params, Utilities, Initializable, OwnableUpgrade
     address public verifier;
 
     address public vkRegistry;
-
-    /// @notice ERC20 contract that hold topup credits
-    TopupCredit public topupCredit;
 
     /// @notice Factory contract that deploy a Poll contract
     ClonableMACIFactory public maciFactory;
@@ -116,7 +112,6 @@ contract ClonableMACI is IMACI, Params, Utilities, Initializable, OwnableUpgrade
     /// @param _vkRegistry The VkRegistry Contract
     /// @param _signUpGatekeeper The SignUpGatekeeper contract
     /// @param _initialVoiceCreditProxy The InitialVoiceCreditProxy contract
-    /// @param _topupCredit The TopupCredit contract
     function initialize(
         address _maciFactory,
         uint8 _stateTreeDepth,
@@ -125,10 +120,8 @@ contract ClonableMACI is IMACI, Params, Utilities, Initializable, OwnableUpgrade
         address _vkRegistry,
         address _signUpGatekeeper,
         address _initialVoiceCreditProxy,
-        address _topupCredit,
         address _coordinator
     ) public initializer {
-        
         __Context_init_unchained();
         __Ownable_init_unchained();
         // because we add a blank leaf we need to count one signup
@@ -148,7 +141,6 @@ contract ClonableMACI is IMACI, Params, Utilities, Initializable, OwnableUpgrade
         stateAq.enqueue(BLANK_STATE_LEAF_HASH);
 
         coordinator = _coordinator;
-        topupCredit = TopupCredit(_topupCredit);
         signUpGatekeeper = SignUpGatekeeper(_signUpGatekeeper);
         initialVoiceCreditProxy = InitialVoiceCreditProxy(_initialVoiceCreditProxy);
 
@@ -195,12 +187,15 @@ contract ClonableMACI is IMACI, Params, Utilities, Initializable, OwnableUpgrade
         signUpGatekeeper.register(msg.sender, _signUpGatekeeperData);
 
         // Get the user's voice credit balance.
-        uint256 voiceCreditBalance = initialVoiceCreditProxy.getVoiceCredits(msg.sender, _initialVoiceCreditProxyData);
+        uint256 voiceCreditBalance = initialVoiceCreditProxy.getVoiceCredits(
+            msg.sender,
+            _initialVoiceCreditProxyData
+        );
 
         uint256 timestamp = block.timestamp;
         // Create a state leaf and enqueue it.
         uint256 stateLeaf = hashStateLeaf(StateLeaf(_pubKey, voiceCreditBalance, timestamp));
-        
+
         uint256 stateIndex = stateAq.enqueue(stateLeaf);
 
         emit SignUp(stateIndex, _pubKey.x, _pubKey.y, voiceCreditBalance, timestamp);
@@ -240,7 +235,6 @@ contract ClonableMACI is IMACI, Params, Utilities, Initializable, OwnableUpgrade
             treeDepths,
             _coordinatorPubKey,
             address(this),
-            topupCredit,
             _owner
         );
 
@@ -253,13 +247,16 @@ contract ClonableMACI is IMACI, Params, Utilities, Initializable, OwnableUpgrade
         polls[pollId] = p;
 
         // store the addresses in a struct so they can be returned
-        pollAddr = PollContracts({ poll: p, messageProcessor: mp, tally: tally, subsidy: subsidy });
+        pollAddr = PollContracts({poll: p, messageProcessor: mp, tally: tally, subsidy: subsidy});
 
         emit DeployPoll(pollId, _coordinatorPubKey.x, _coordinatorPubKey.y, pollAddr);
     }
 
     /// @inheritdoc IMACI
-    function mergeStateAqSubRoots(uint256 _numSrQueueOps, uint256 _pollId) public onlyPoll(_pollId) {
+    function mergeStateAqSubRoots(
+        uint256 _numSrQueueOps,
+        uint256 _pollId
+    ) public onlyPoll(_pollId) {
         stateAq.mergeSubRoots(_numSrQueueOps);
 
         // if we have merged all subtrees then put a block

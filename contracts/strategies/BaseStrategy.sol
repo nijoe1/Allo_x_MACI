@@ -5,8 +5,8 @@ pragma solidity 0.8.19;
 import "../core/interfaces/IStrategy.sol";
 
 // Libraries
-import { Transfer } from "../core/libraries/Transfer.sol";
-import { Errors } from "../core/libraries/Errors.sol";
+import {Transfer} from "../core/libraries/Transfer.sol";
+import {Errors} from "../core/libraries/Errors.sol";
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -176,7 +176,10 @@ abstract contract BaseStrategy is IStrategy, Transfer, Errors {
     ///      call this when it is initialized.
     /// @param _data The data to use to allocate to the recipient
     /// @param _sender The address of the sender
-    function allocate(bytes memory _data, address _sender) external payable onlyAllo onlyInitialized {
+    function allocate(
+        bytes memory _data,
+        address _sender
+    ) external payable onlyAllo onlyInitialized {
         _beforeAllocate(_data, _sender);
         _allocate(_data, _sender);
         _afterAllocate(_data, _sender);
@@ -292,7 +295,10 @@ abstract contract BaseStrategy is IStrategy, Transfer, Errors {
     /// @param _data The data to use to register the recipient
     /// @param _sender The address of the sender
     /// @return The ID of the recipient
-    function _registerRecipient(bytes memory _data, address _sender) internal virtual returns (address);
+    function _registerRecipient(
+        bytes memory _data,
+        address _sender
+    ) internal virtual returns (address);
 
     /// @notice This will allocate to a recipient.
     /// @dev The encoded '_data' will be determined by the strategy implementation.
@@ -306,14 +312,21 @@ abstract contract BaseStrategy is IStrategy, Transfer, Errors {
     /// @param _recipientIds The ids of the recipients to distribute to
     /// @param _data Data required will depend on the strategy implementation
     /// @param _sender The address of the sender
-    function _distribute(address[] memory _recipientIds, bytes memory _data, address _sender) internal virtual;
+    function _distribute(
+        address[] memory _recipientIds,
+        bytes memory _data,
+        address _sender
+    ) internal virtual;
 
     /// @notice This will get the payout summary for a recipient.
     /// @dev The encoded '_data' will be determined by the strategy implementation.
     /// @param _recipientId The ID of the recipient
     /// @param _data The data to use to get the payout summary for the recipient
     /// @return The payout summary for the recipient
-    function _getPayout(address _recipientId, bytes memory _data) internal view virtual returns (PayoutSummary memory);
+    function _getPayout(
+        address _recipientId,
+        bytes memory _data
+    ) internal view virtual returns (PayoutSummary memory);
 
     /// @notice This will get the status of a recipient.
     /// @param _recipientId The ID of the recipient
@@ -356,11 +369,19 @@ abstract contract BaseStrategy is IStrategy, Transfer, Errors {
     /// @param _recipientIds The IDs of the recipients
     /// @param _data The data to use to distribute to the recipients
     /// @param _sender The address of the sender
-    function _beforeDistribute(address[] memory _recipientIds, bytes memory _data, address _sender) internal virtual {}
+    function _beforeDistribute(
+        address[] memory _recipientIds,
+        bytes memory _data,
+        address _sender
+    ) internal virtual {}
 
     /// @notice Hook called after distributing funds (tokens) to recipients.
     /// @param _recipientIds The IDs of the recipients
     /// @param _data The data to use to distribute to the recipients
     /// @param _sender The address of the sender
-    function _afterDistribute(address[] memory _recipientIds, bytes memory _data, address _sender) internal virtual {}
+    function _afterDistribute(
+        address[] memory _recipientIds,
+        bytes memory _data,
+        address _sender
+    ) internal virtual {}
 }

@@ -2,7 +2,7 @@
 pragma solidity 0.8.19;
 
 // Interfaces
-import { IAllo } from "./IAllo.sol";
+import {IAllo} from "./IAllo.sol";
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -71,7 +71,12 @@ interface IStrategy {
     /// @param recipientAddress The recipient
     /// @param amount The amount distributed
     /// @param sender The sender
-    event Distributed(address indexed recipientId, address recipientAddress, uint256 amount, address sender);
+    event Distributed(
+        address indexed recipientId,
+        address recipientAddress,
+        uint256 amount,
+        address sender
+    );
 
     /// @notice Emitted when pool is set to active status.
     /// @param active The status of the pool
@@ -147,7 +152,10 @@ interface IStrategy {
     /// @param _data The data to use to register the recipient
     /// @param _sender The address of the sender
     /// @return The ID of the recipient
-    function registerRecipient(bytes memory _data, address _sender) external payable returns (address);
+    function registerRecipient(
+        bytes memory _data,
+        address _sender
+    ) external payable returns (address);
 
     /// @notice This will allocate to a recipient.
     /// @dev The encoded '_data' will be determined by the strategy implementation.
@@ -158,5 +166,9 @@ interface IStrategy {
     /// @notice This will distribute funds (tokens) to recipients.
     /// @dev most strategies will track a TOTAL amount per recipient, and a PAID amount, and pay the difference
     /// this contract will need to track the amount paid already, so that it doesn't double pay.
-    function distribute(address[] memory _recipientIds, bytes memory _data, address _sender) external;
+    function distribute(
+        address[] memory _recipientIds,
+        bytes memory _data,
+        address _sender
+    ) external;
 }

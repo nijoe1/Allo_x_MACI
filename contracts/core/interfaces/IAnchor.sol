@@ -26,5 +26,9 @@ interface IAnchor {
     /// @param _value The amount of native token to send
     /// @param _data The data to send to the target address
     /// @return Data returned from the target address
-    function execute(address _target, uint256 _value, bytes memory _data) external returns (bytes memory);
+    function execute(
+        address _target,
+        uint256 _value,
+        bytes memory _data
+    ) external returns (bytes memory);
 }

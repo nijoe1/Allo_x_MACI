@@ -1,23 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { AccQueue } from "maci-contracts/contracts/trees/AccQueue.sol";
-import { IMACI } from "maci-contracts/contracts/interfaces/IMACI.sol";
-import { IPoll } from "maci-contracts/contracts/interfaces/IPoll.sol";
-import { SnarkCommon } from "maci-contracts/contracts/crypto/SnarkCommon.sol";
-import { Hasher } from "maci-contracts/contracts/crypto/Hasher.sol";
-import { IVerifier } from "maci-contracts/contracts/interfaces/IVerifier.sol";
-import { IVkRegistry } from "maci-contracts/contracts/interfaces/IVkRegistry.sol";
-import { IMessageProcessor } from "maci-contracts/contracts/interfaces/IMessageProcessor.sol";
-import { CommonUtilities } from "maci-contracts/contracts/utilities/CommonUtilities.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {AccQueue} from "maci-contracts/contracts/trees/AccQueue.sol";
+import {IMACI} from "maci-contracts/contracts/interfaces/IMACI.sol";
+import {IPoll} from "maci-contracts/contracts/interfaces/IPoll.sol";
+import {SnarkCommon} from "maci-contracts/contracts/crypto/SnarkCommon.sol";
+import {Hasher} from "maci-contracts/contracts/crypto/Hasher.sol";
+import {IVerifier} from "maci-contracts/contracts/interfaces/IVerifier.sol";
+import {IVkRegistry} from "maci-contracts/contracts/interfaces/IVkRegistry.sol";
+import {IMessageProcessor} from "maci-contracts/contracts/interfaces/IMessageProcessor.sol";
+import {CommonUtilities} from "maci-contracts/contracts/utilities/CommonUtilities.sol";
 
 /// @title ClonableMessageProcessor
 /// @dev MessageProcessor is used to process messages published by signup users.
 /// It will process message by batch due to large size of messages.
 /// After it finishes processing, the sbCommitment will be used for Tally and Subsidy contracts.
-contract ClonableMessageProcessor is OwnableUpgradeable, SnarkCommon, Hasher, CommonUtilities, IMessageProcessor {
+contract ClonableMessageProcessor is
+    OwnableUpgradeable,
+    SnarkCommon,
+    Hasher,
+    CommonUtilities,
+    IMessageProcessor
+{
     /// @notice custom errors
     error NoMoreMessages();
     error StateAqNotMerged();
@@ -66,7 +72,10 @@ contract ClonableMessageProcessor is OwnableUpgradeable, SnarkCommon, Hasher, Co
     /// @param _newSbCommitment The new state root and ballot root commitment
     ///                         after all messages are processed
     /// @param _proof The zk-SNARK proof
-    function processMessages(uint256 _newSbCommitment, uint256[8] memory _proof) external onlyOwner {
+    function processMessages(
+        uint256 _newSbCommitment,
+        uint256[8] memory _proof
+    ) external onlyOwner {
         // ensure the voting period is over
         _votingPeriodOver(poll);
 
@@ -81,7 +90,8 @@ contract ClonableMessageProcessor is OwnableUpgradeable, SnarkCommon, Hasher, Co
         }
 
         // Retrieve stored vals
-        (, uint8 messageTreeSubDepth, uint8 messageTreeDepth, uint8 voteOptionTreeDepth) = poll.treeDepths();
+        (, uint8 messageTreeSubDepth, uint8 messageTreeDepth, uint8 voteOptionTreeDepth) = poll
+            .treeDepths();
         // calculate the message batch size from the message tree subdepth
         uint256 messageBatchSize = TREE_ARITY ** messageTreeSubDepth;
 
@@ -273,7 +283,11 @@ contract ClonableMessageProcessor is OwnableUpgradeable, SnarkCommon, Hasher, Co
         if (_currentMessageBatchIndex >= 2 ** 50) revert CurrentMessageBatchIndexTooLarge();
         if (batchEndIndex >= 2 ** 50) revert BatchEndIndexTooLarge();
 
-        result = maxVoteOptions + (_numSignUps << 50) + (_currentMessageBatchIndex << 100) + (batchEndIndex << 150);
+        result =
+            maxVoteOptions +
+            (_numSignUps << 50) +
+            (_currentMessageBatchIndex << 100) +
+            (batchEndIndex << 150);
     }
 
     /// @notice update message processing state variables

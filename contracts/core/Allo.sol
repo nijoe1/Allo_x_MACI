@@ -11,10 +11,10 @@ import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 import "./interfaces/IAllo.sol";
 
 // Internal Libraries
-import { Clone } from "./libraries/Clone.sol";
-import { Errors } from "./libraries/Errors.sol";
+import {Clone} from "./libraries/Clone.sol";
+import {Errors} from "./libraries/Errors.sol";
 import "./libraries/Native.sol";
-import { Transfer } from "./libraries/Transfer.sol";
+import {Transfer} from "./libraries/Transfer.sol";
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣗⠀⠀⠀⢸⣿⣿⣿⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -170,7 +170,16 @@ contract Allo is
         if (_isCloneableStrategy(_strategy)) revert IS_APPROVED_STRATEGY();
 
         // Call the internal '_createPool()' function and return the pool ID
-        return _createPool(_profileId, IStrategy(_strategy), _initStrategyData, _token, _amount, _metadata, _managers);
+        return
+            _createPool(
+                _profileId,
+                IStrategy(_strategy),
+                _initStrategyData,
+                _token,
+                _amount,
+                _metadata,
+                _managers
+            );
     }
 
     /// @notice Creates a new pool (by cloning a cloneable strategies).
@@ -214,7 +223,10 @@ contract Allo is
     /// @dev 'msg.sender' must be a pool manager. Emits 'PoolMetadataUpdated()' event.
     /// @param _poolId ID of the pool
     /// @param _metadata The new metadata of the pool
-    function updatePoolMetadata(uint256 _poolId, Metadata memory _metadata) external onlyPoolManager(_poolId) {
+    function updatePoolMetadata(
+        uint256 _poolId,
+        Metadata memory _metadata
+    ) external onlyPoolManager(_poolId) {
         Pool storage pool = pools[_poolId];
         pool.metadata = _metadata;
 
@@ -296,7 +308,9 @@ contract Allo is
     /// @param _recipient The recipient
     function recoverFunds(address _token, address _recipient) external onlyOwner {
         // Get the amount of the token to transfer, which is always the entire balance of the contract address
-        uint256 amount = _token == NATIVE ? address(this).balance : IERC20Upgradeable(_token).balanceOf(address(this));
+        uint256 amount = _token == NATIVE
+            ? address(this).balance
+            : IERC20Upgradeable(_token).balanceOf(address(this));
 
         // Transfer the amount to the recipient (pool owner)
         _transferAmount(_token, _recipient, amount);
@@ -312,9 +326,12 @@ contract Allo is
     /// @param _poolId ID of the pool
     /// @param _data Encoded data unique to a strategy that registerRecipient() requires
     /// @return recipientId The recipient ID that has been registered
-    function registerRecipient(uint256 _poolId, bytes memory _data) external payable nonReentrant returns (address) {
+    function registerRecipient(
+        uint256 _poolId,
+        bytes memory _data
+    ) external payable nonReentrant returns (address) {
         // Return the recipientId (address) from the strategy
-        return pools[_poolId].strategy.registerRecipient{ value: msg.value }(_data, msg.sender);
+        return pools[_poolId].strategy.registerRecipient{value: msg.value}(_data, msg.sender);
     }
 
     /// @notice Register multiple recipients to multiple pools.
@@ -375,7 +392,10 @@ contract Allo is
     ///      want to send funds to the strategy, you must send the funds using 'fundPool()'.
     /// @param _poolIds IDs of the pools
     /// @param _datas encoded data unique to the strategy for that pool
-    function batchAllocate(uint256[] calldata _poolIds, bytes[] memory _datas) external nonReentrant {
+    function batchAllocate(
+        uint256[] calldata _poolIds,
+        bytes[] memory _datas
+    ) external nonReentrant {
         uint256 numPools = _poolIds.length;
 
         // Reverts if the length of _poolIds does not match the length of _datas with 'MISMATCH()' error
@@ -396,7 +416,11 @@ contract Allo is
     /// @param _poolId ID of the pool
     /// @param _recipientIds Ids of the recipients of the distribution
     /// @param _data Encoded data unique to the strategy
-    function distribute(uint256 _poolId, address[] memory _recipientIds, bytes memory _data) external nonReentrant {
+    function distribute(
+        uint256 _poolId,
+        address[] memory _recipientIds,
+        bytes memory _data
+    ) external nonReentrant {
         pools[_poolId].strategy.distribute(_recipientIds, _data, msg.sender);
     }
 
@@ -468,7 +492,8 @@ contract Allo is
         // Initialization is expected to revert when invoked more than once with 'ALREADY_INITIALIZED()' error
         _strategy.initialize(poolId, _initStrategyData);
 
-        if (_strategy.getPoolId() != poolId || address(_strategy.getAllo()) != address(this)) revert MISMATCH();
+        if (_strategy.getPoolId() != poolId || address(_strategy.getAllo()) != address(this))
+            revert MISMATCH();
 
         // grant pool managers roles
         uint256 managersLength = _managers.length;
@@ -486,7 +511,10 @@ contract Allo is
             // To prevent paying the baseFee from the Allo contract's balance
             // If _token is NATIVE, then baseFee + _amount should be > than msg.value.
             // If _token is not NATIVE, then baseFee should be > than msg.value.
-            if ((_token == NATIVE && (baseFee + _amount != msg.value)) || (_token != NATIVE && baseFee != msg.value)) {
+            if (
+                (_token == NATIVE && (baseFee + _amount != msg.value)) ||
+                (_token != NATIVE && baseFee != msg.value)
+            ) {
                 revert NOT_ENOUGH_FUNDS();
             }
             _transferAmount(NATIVE, treasury, baseFee);
@@ -506,7 +534,7 @@ contract Allo is
     /// @param _poolId ID of the pool
     /// @param _data Encoded data unique to the strategy for that pool
     function _allocate(uint256 _poolId, bytes memory _data) internal {
-        pools[_poolId].strategy.allocate{ value: msg.value }(_data, msg.sender);
+        pools[_poolId].strategy.allocate{value: msg.value}(_data, msg.sender);
     }
 
     /// @notice Fund a pool.
@@ -529,10 +557,16 @@ contract Allo is
             if (feeAmount + amountAfterFee != _amount) revert INVALID();
 
             if (_token == NATIVE) {
-                _transferAmountFrom(_token, TransferData({ from: msg.sender, to: treasury, amount: feeAmount }));
+                _transferAmountFrom(
+                    _token,
+                    TransferData({from: msg.sender, to: treasury, amount: feeAmount})
+                );
             } else {
                 uint256 balanceBeforeFee = _getBalance(_token, treasury);
-                _transferAmountFrom(_token, TransferData({ from: msg.sender, to: treasury, amount: feeAmount }));
+                _transferAmountFrom(
+                    _token,
+                    TransferData({from: msg.sender, to: treasury, amount: feeAmount})
+                );
                 uint256 balanceAfterFee = _getBalance(_token, treasury);
                 // Track actual fee paid to account for fee on ERC20 token transfers
                 feeAmount = balanceAfterFee - balanceBeforeFee;
@@ -542,13 +576,13 @@ contract Allo is
         if (_token == NATIVE) {
             _transferAmountFrom(
                 _token,
-                TransferData({ from: msg.sender, to: address(_strategy), amount: amountAfterFee })
+                TransferData({from: msg.sender, to: address(_strategy), amount: amountAfterFee})
             );
         } else {
             uint256 balanceBeforeFundingPool = _getBalance(_token, address(_strategy));
             _transferAmountFrom(
                 _token,
-                TransferData({ from: msg.sender, to: address(_strategy), amount: amountAfterFee })
+                TransferData({from: msg.sender, to: address(_strategy), amount: amountAfterFee})
             );
             uint256 balanceAfterFundingPool = _getBalance(_token, address(_strategy));
             // Track actual fee paid to account for fee on ERC20 token transfers

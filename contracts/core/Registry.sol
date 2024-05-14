@@ -4,13 +4,13 @@ pragma solidity 0.8.19;
 // External Libraries
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { ERC20 } from "./libraries/tokens/ERC20.sol";
+import {ERC20} from "./libraries/tokens/ERC20.sol";
 // Interfaces
 import "./interfaces/IRegistry.sol";
 // Internal Libraries
-import { Anchor } from "./Anchor.sol";
-import { Errors } from "./libraries/Errors.sol";
-import { Metadata } from "./libraries/Metadata.sol";
+import {Anchor} from "./Anchor.sol";
+import {Errors} from "./libraries/Errors.sol";
+import {Metadata} from "./libraries/Metadata.sol";
 import "./libraries/Native.sol";
 import "./libraries/Transfer.sol";
 
@@ -166,7 +166,14 @@ contract Registry is IRegistry, Initializable, Native, AccessControlUpgradeable,
         }
 
         // Emit the event that the profile was created
-        emit ProfileCreated(profileId, profile.nonce, profile.name, profile.metadata, profile.owner, profile.anchor);
+        emit ProfileCreated(
+            profileId,
+            profile.nonce,
+            profile.name,
+            profile.metadata,
+            profile.owner,
+            profile.anchor
+        );
 
         // Return the profile ID
         return profileId;
@@ -225,7 +232,10 @@ contract Registry is IRegistry, Initializable, Native, AccessControlUpgradeable,
     /// @param _profileId The ID of the profile
     /// @param _account The address to check
     /// @return 'true' if the address is an owner or member of the profile, otherwise 'false'
-    function isOwnerOrMemberOfProfile(bytes32 _profileId, address _account) external view returns (bool) {
+    function isOwnerOrMemberOfProfile(
+        bytes32 _profileId,
+        address _account
+    ) external view returns (bool) {
         return _isOwnerOfProfile(_profileId, _account) || _isMemberOfProfile(_profileId, _account);
     }
 
@@ -285,7 +295,10 @@ contract Registry is IRegistry, Initializable, Native, AccessControlUpgradeable,
     /// @dev 'msg.sender' must be the owner of the profile.
     /// @param _profileId The ID of the profile
     /// @param _members The members to add
-    function addMembers(bytes32 _profileId, address[] memory _members) external onlyProfileOwner(_profileId) {
+    function addMembers(
+        bytes32 _profileId,
+        address[] memory _members
+    ) external onlyProfileOwner(_profileId) {
         uint256 memberLength = _members.length;
 
         // Loop through the members and add them to the profile by granting the role
@@ -307,7 +320,10 @@ contract Registry is IRegistry, Initializable, Native, AccessControlUpgradeable,
     /// @dev 'msg.sender' must be the pending owner of the profile.
     /// @param _profileId The ID of the profile
     /// @param _members The members to remove
-    function removeMembers(bytes32 _profileId, address[] memory _members) external onlyProfileOwner(_profileId) {
+    function removeMembers(
+        bytes32 _profileId,
+        address[] memory _members
+    ) external onlyProfileOwner(_profileId) {
         uint256 memberLength = _members.length;
 
         // Loop through the members and remove them from the profile by revoking the role
@@ -336,7 +352,10 @@ contract Registry is IRegistry, Initializable, Native, AccessControlUpgradeable,
     /// @param _profileId The ID of the profile
     /// @param _name The name of the profile
     /// @return anchor The address of the deployed anchor contract
-    function _generateAnchor(bytes32 _profileId, string memory _name) internal returns (address anchor) {
+    function _generateAnchor(
+        bytes32 _profileId,
+        string memory _name
+    ) internal returns (address anchor) {
         bytes memory encodedData = abi.encode(_profileId, _name);
         bytes memory encodedConstructorArgs = abi.encode(_profileId, address(this));
 
@@ -345,14 +364,21 @@ contract Registry is IRegistry, Initializable, Native, AccessControlUpgradeable,
         bytes32 salt = keccak256(encodedData);
 
         address preComputedAddress = address(
-            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, keccak256(bytecode)))))
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(bytes1(0xff), address(this), salt, keccak256(bytecode))
+                    )
+                )
+            )
         );
 
         // Try to deploy the anchor contract, if it fails then the anchor already exists
-        try new Anchor{ salt: salt }(_profileId, address(this)) returns (Anchor _anchor) {
+        try new Anchor{salt: salt}(_profileId, address(this)) returns (Anchor _anchor) {
             anchor = address(_anchor);
         } catch {
-            if (Anchor(payable(preComputedAddress)).profileId() != _profileId) revert ANCHOR_ERROR();
+            if (Anchor(payable(preComputedAddress)).profileId() != _profileId)
+                revert ANCHOR_ERROR();
             anchor = preComputedAddress;
         }
     }
@@ -391,7 +417,9 @@ contract Registry is IRegistry, Initializable, Native, AccessControlUpgradeable,
     function recoverFunds(address _token, address _recipient) external onlyRole(ALLO_OWNER) {
         if (_recipient == address(0)) revert ZERO_ADDRESS();
 
-        uint256 amount = _token == NATIVE ? address(this).balance : ERC20(_token).balanceOf(address(this));
+        uint256 amount = _token == NATIVE
+            ? address(this).balance
+            : ERC20(_token).balanceOf(address(this));
         _transferAmount(_token, _recipient, amount);
     }
 }
