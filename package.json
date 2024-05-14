@@ -46,7 +46,6 @@
     "ipfs-only-hash": "^4.0.0",
     "maci-cli": "^1.2.0",
     "maci-contracts": "1.2.0",
-    "snarkjs": "^0.7.4",
     "solhint": "^4.5.4",
     "solidity-coverage": "^0.8.1",
     "typechain": "^8.3.0",
